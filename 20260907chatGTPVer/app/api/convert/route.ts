@@ -1,109 +1,65 @@
 import { askOpenAI, errorResponse } from "@/lib/openai";
 
-const grades = new Set(["小4", "小5", "小6", "中1", "中2", "中3"]);
 const schema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    title: { type: "string" },
+    headline: { type: "string" },
     body: { type: "string" },
-    points: { type: "array", minItems: 3, maxItems: 3, items: { type: "string" } },
-    words: {
-      type: "array", minItems: 3, maxItems: 5,
-      items: {
-        type: "object", additionalProperties: false,
-        properties: { term: { type: "string" }, meaning: { type: "string" } },
-        required: ["term", "meaning"],
-      },
-    },
-    why: { type: "string" },
-    relation: { type: "string" },
-    quiz: { type: "array", minItems: 3, maxItems: 3, items: { type: "string" } },
+    caption: { type: "string" },
+    review: { type: "array", items: { type: "string" } },
   },
-  required: ["title", "body", "points", "words", "why", "relation", "quiz"],
-};
-
-const gradeRules: Record<string, string> = {
-  "小4": "小4までの漢字を中心にし、未習漢字には読みを添える。一文30〜35字を目安に、一文一情報で説明する。",
-  "小5": "小5までの漢字を中心にし、原因と結果を明示する。一文35〜40字を目安にする。",
-  "小6": "出来事・原因・結果・背景の関係を残す。一文40〜45字を目安にする。",
-  "中1": "重要な社会用語を残して説明し、記事の要旨と段落関係が分かる形にする。",
-  "中2": "新聞語彙を残し、論点・背景・因果関係・影響を整理する。",
-  "中3": "原文を最大限維持し、長すぎる文と難語だけを補助して新聞原文への橋渡しにする。",
-};
-
-const sectionRules: Record<string, string> = {
-  "小4": `すべての欄を小学4年生向けにする。
-- points：各項目20〜30字ほど。「だれが・何をした・どうなる」を、やさしい一文で書く。抽象語だけでまとめない。
-- words：5語。難しい言葉には読み方を付け、意味は小4が知っている言葉で一文にする。
-- why：記事に書かれた理由を、短い文で具体的に説明する。
-- relation：子どもの生活との関係が記事にある場合だけ、身近な言葉で説明する。
-- quiz：記事の中に答えがそのまま書いてある質問を3問。「いつ」「だれ」「何をした」など、一問一内容にする。意見、要約、推論を求めない。`,
-  "小5": `すべての欄を小学5年生向けにする。
-- points：出来事・理由・結果を、各一文で具体的に書く。
-- words：5語。読み方と、短く具体的な意味を示す。
-- why：記事に書かれた原因を順番に説明する。
-- relation：生活や地域との関係を具体的に説明する。
-- quiz：記事から答えを見つけられる問題を中心にし、理由を問う問題は1問までにする。`,
-  "小6": `すべての欄を小学6年生向けにする。
-- points：出来事・原因・影響を区別してまとめる。
-- words：4語。重要な社会用語を残して説明する。
-- why：原因と結果のつながりを説明する。
-- relation：地域や社会への影響を記事の範囲で説明する。
-- quiz：事実確認2問と、原因・結果を確かめる問題1問にする。`,
-  "中1": `すべての欄を中学1年生向けにする。
-- points：記事の要旨、理由、影響を簡潔にまとめる。
-- words：4語。社会で使われる用語を残して説明する。
-- whyとrelation：記事の因果関係を整理する。
-- quiz：要旨、事実、理由を確かめる3問にする。`,
-  "中2": `すべての欄を中学2年生向けにする。
-- points：論点・背景・影響が分かれるようにまとめる。
-- words：3語。新聞語彙を保って説明する。
-- whyとrelation：複数の因果関係や社会への影響を整理する。
-- quiz：論点、根拠、影響を読み取る3問にする。`,
-  "中3": `すべての欄を中学3年生向けにする。
-- points：原文の論点・根拠・影響を正確にまとめる。
-- words：3語。難しい新聞語彙だけを説明する。
-- whyとrelation：事実と意見を分け、原文の論理を保つ。
-- quiz：要旨、根拠、事実と意見の区別を問う3問にする。`,
+  required: ["headline", "body", "caption", "review"],
 };
 
 export async function POST(request: Request) {
   try {
-    const { text, grade } = await request.json() as { text?: string; grade?: string };
-    if (!text?.trim() || text.length > 5_000 || !grade || !grades.has(grade)) {
-      return Response.json({ error: "文章または学年の指定を確認してください。" }, { status: 400 });
+    const body = await request.json() as { imageDataUrl?: string; imageDataUrls?: string[] };
+    const images = body.imageDataUrls?.length ? body.imageDataUrls : body.imageDataUrl ? [body.imageDataUrl] : [];
+    if (images.length < 1 || images.length > 3 || images.some((image) => !image.startsWith("data:image/")) || images.reduce((sum, image) => sum + image.length, 0) > 8_000_000) {
+      return Response.json({ error: "画像が大きすぎるか、画像形式が正しくありません。" }, { status: 400 });
     }
 
-    const result = await askOpenAI([{
+    const imageParts = images.map((image_url) => ({ type: "input_image", image_url, detail: "original" }));
+    const transcriptionPrompt = `画像は、赤枠から切り出された日本語の縦書き新聞記事です。
+複数画像の場合は同じ記事の段で、上の段から下の段の順に並んでいます。画像1をすべて読んでから画像2へ進んでください。
+各画像の中では、右上から下へ読み、次に左の列へ移ってください。
+見出し、本文、写真説明を区別してください。
+人名・地名・日時・金額・人数・割合は特に慎重に読み取ってください。
+国名、組織名、カタカナの固有名詞は、文脈や一般知識で補わず、画像に見える文字だけを一文字ずつ転記してください。
+例えば「フランス」を、文脈から「フィリピン」など別の国名へ置き換えてはいけません。
+「検討」「決定」「予定」「開始」など、事実の強さを変える言葉にも注意してください。
+読めない文字は推測せず「□」にしてください。
+段落は改行で残し、紙面にない内容は絶対に追加しないでください。
+reviewには、確認が必要な箇所を短く列挙してください。なければ空配列です。`;
+    const readOnce = () => askOpenAI([{
       role: "user",
-      content: [{
-        type: "input_text",
-        text: `あなたは新聞記事の読解を支援する教育編集AIです。次の記事を${grade}向けに変換してください。
+      content: [{ type: "input_text", text: transcriptionPrompt }, ...imageParts],
+    }], schema);
+    const [draftA, draftB] = await Promise.all([readOnce(), readOnce()]);
+    const verified = await askOpenAI([{
+      role: "user",
+      content: [
+        {
+          type: "input_text",
+          text: `同じ新聞画像を、互いの答えを見せずに2回OCRした結果です。元画像を最終根拠として照合し、正しい転記を返してください。
+2つの結果が異なる箇所は、必ず元画像の字形を一文字ずつ確認してください。文脈上もっともらしい語を選んではいけません。
+特に国名、組織名、カタカナ、人名、地名、日時、金額、人数、割合、および「検討／決定」など意味を変える語を重点確認してください。
+2つの結果で固有名詞や数値が異なった場合は、採用した表記にかかわらず、その箇所をreviewへ入れてください。
+誤字、列や段の読み順、見出し・本文・写真説明の混同も直してください。
+画像で確認できない文字は推測せず「□」にし、その箇所をreviewへ入れてください。
+画像にない説明や要約は加えず、新聞の本文をそのまま転記してください。
 
-学年別ルール：${gradeRules[grade]}
+独立OCR結果A:
+${JSON.stringify(draftA)}
 
-各欄の学年別ルール：
-${sectionRules[grade]}
-
-絶対ルール：
-- 事実、固有名詞、日時、人数、金額、割合、発言者を変えない。
-- 原文にない理由・背景・評価・推測を追加しない。
-- 重要なニュース用語は削除せず、wordsで説明する。
-- whyやrelationが記事から分からない場合は「この記事だけでは詳しく分かりません。」とする。
-- title、bodyだけでなく、points、words、why、relation、quizも指定学年に合わせる。
-- pointsは大事なこと3点、quizは理解確認3問にする。
-- quizは必ず記事の内容だけで答えられる問いにする。記事にない知識や難しい推測を求めない。
-
-記事：
-${text.trim()}`,
-      }],
-    }], schema) as { words: Array<{ term: string; meaning: string }> } & Record<string, unknown>;
-
-    return Response.json({
-      ...result,
-      words: result.words.map(({ term, meaning }) => [term, meaning]),
-    });
+独立OCR結果B:
+${JSON.stringify(draftB)}`,
+        },
+        ...imageParts,
+      ],
+    }], schema);
+    return Response.json(verified);
   } catch (error) {
     return errorResponse(error);
   }
