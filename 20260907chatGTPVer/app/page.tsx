@@ -28,7 +28,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">段数選択OCR版 <b>Ver.2.3</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">段境界検出版 <b>Ver.2.4</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞が、わかる。社会が、近くなる。</p><h1>新聞を1回撮って、<br/><em>読みたい記事を囲むだけ。</em></h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
@@ -100,12 +100,39 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
       const context = crop.getContext("2d"); if (!context) throw new Error("画像を処理できませんでした。");
       context.fillStyle = "#fff"; context.fillRect(0, 0, crop.width, crop.height); context.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, crop.width, crop.height);
       const tileCount = stageCount;
+      const pixels = context.getImageData(0, 0, crop.width, crop.height).data;
+      const rowInk = (row: number) => {
+        let dark = 0, checked = 0;
+        for (let y = Math.max(0, row - 2); y <= Math.min(crop.height - 1, row + 2); y++) {
+          for (let x = 0; x < crop.width; x += 4) {
+            const offset = (y * crop.width + x) * 4;
+            const brightness = pixels[offset] * .299 + pixels[offset + 1] * .587 + pixels[offset + 2] * .114;
+            if (brightness < 205) dark++;
+            checked++;
+          }
+        }
+        return dark / Math.max(1, checked);
+      };
+      const boundaries = [0];
+      for (let index = 1; index < tileCount; index++) {
+        const ideal = crop.height * index / tileCount;
+        const radius = Math.max(24, crop.height / tileCount * .28);
+        const from = Math.max(boundaries[index - 1] + 30, Math.floor(ideal - radius));
+        const to = Math.min(crop.height - 30, Math.ceil(ideal + radius));
+        let bestRow = Math.round(ideal), bestScore = Number.POSITIVE_INFINITY;
+        for (let row = from; row <= to; row += 2) {
+          const distancePenalty = Math.abs(row - ideal) / radius * .012;
+          const score = rowInk(row) + distancePenalty;
+          if (score < bestScore) { bestScore = score; bestRow = row; }
+        }
+        boundaries.push(bestRow);
+      }
+      boundaries.push(crop.height);
       const makeTiles = (quality: number) => Array.from({ length: tileCount }, (_, index) => {
         if (tileCount === 1) return crop.toDataURL("image/jpeg", quality);
-        const baseHeight = crop.height / tileCount;
-        const overlap = Math.min(70, Math.round(baseHeight * .1));
-        const tileTop = Math.max(0, Math.floor(index * baseHeight - (index ? overlap : 0)));
-        const tileBottom = Math.min(crop.height, Math.ceil((index + 1) * baseHeight + (index < tileCount - 1 ? overlap : 0)));
+        const overlap = Math.min(18, Math.round(crop.height / tileCount * .02));
+        const tileTop = Math.max(0, boundaries[index] - (index ? overlap : 0));
+        const tileBottom = Math.min(crop.height, boundaries[index + 1] + (index < tileCount - 1 ? overlap : 0));
         const tile = document.createElement("canvas");
         tile.width = crop.width; tile.height = tileBottom - tileTop;
         const tileContext = tile.getContext("2d");
