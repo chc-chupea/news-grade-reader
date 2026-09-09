@@ -28,7 +28,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">4段読取版 <b>Ver.2.1</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">4段読取版 <b>Ver.2.1.1</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞が、わかる。社会が、近くなる。</p><h1>新聞を1回撮って、<br/><em>読みたい記事を囲むだけ。</em></h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
@@ -62,12 +62,22 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
   useEffect(() => { draw(); }, [box]);
   const load = (file?: File) => {
     if (!file) return;
+    setFileName(file.name);
+    setBox(null);
+    setMessage("画像を読み込んでいます…");
     const image = new Image();
     image.onload = () => {
-      imageRef.current = image; const canvas = canvasRef.current; if (!canvas) return;
-      const scale = Math.min(1, 1100 / image.naturalWidth);
-      canvas.width = Math.round(image.naturalWidth * scale); canvas.height = Math.round(image.naturalHeight * scale);
-      setFileName(file.name); setBox(null); setMessage("読みたい記事を、見出しから本文の終わりまで囲んでください。"); draw(null); URL.revokeObjectURL(image.src);
+      imageRef.current = image;
+      requestAnimationFrame(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) { setMessage("画像表示欄を準備できませんでした。もう一度選んでください。"); return; }
+        const scale = Math.min(1, 1100 / image.naturalWidth);
+        canvas.width = Math.round(image.naturalWidth * scale);
+        canvas.height = Math.round(image.naturalHeight * scale);
+        setMessage("読みたい記事を、見出しから本文の終わりまで囲んでください。");
+        draw(null);
+        URL.revokeObjectURL(image.src);
+      });
     };
     image.onerror = () => setMessage("画像を開けませんでした。JPEGまたはPNGを選んでください。");
     image.src = URL.createObjectURL(file);
