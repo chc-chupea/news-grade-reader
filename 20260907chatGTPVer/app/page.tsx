@@ -28,7 +28,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">スマホ操作改善版 <b>Ver.2.8</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">写真補正版 <b>Ver.2.9</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞が、わかる。社会が、近くなる。</p><h1>気になるニュースを、<br/>読みやすい<span className="word-highlight">言葉</span>へ。</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
@@ -53,11 +53,46 @@ function QuizItem({ number, question, answer }: { number: number; question: stri
   </div>;
 }
 
+function estimateStraighteningAngle(image: HTMLImageElement) {
+  const sample = document.createElement("canvas");
+  const scale = Math.min(1, 420 / Math.max(image.naturalWidth, image.naturalHeight));
+  sample.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  sample.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = sample.getContext("2d", { willReadFrequently: true });
+  if (!context) return 0;
+  context.drawImage(image, 0, 0, sample.width, sample.height);
+  const pixels = context.getImageData(0, 0, sample.width, sample.height).data;
+  const darkPoints: Array<[number, number]> = [];
+  for (let y = 2; y < sample.height - 2; y += 2) for (let x = 2; x < sample.width - 2; x += 2) {
+    const offset = (y * sample.width + x) * 4;
+    const brightness = pixels[offset] * .299 + pixels[offset + 1] * .587 + pixels[offset + 2] * .114;
+    if (brightness < 145) darkPoints.push([x, y]);
+  }
+  if (darkPoints.length < 150) return 0;
+  const diagonal = Math.ceil(Math.hypot(sample.width, sample.height));
+  const centerX = sample.width / 2, centerY = sample.height / 2;
+  let bestAngle = 0, bestScore = -1;
+  for (let angle = -7; angle <= 7; angle += .5) {
+    const radians = angle * Math.PI / 180, cosine = Math.cos(radians), sine = Math.sin(radians);
+    const rows = new Uint16Array(diagonal + 2), columns = new Uint16Array(diagonal + 2);
+    for (const [x, y] of darkPoints) {
+      const dx = x - centerX, dy = y - centerY;
+      columns[Math.round(dx * cosine - dy * sine + diagonal / 2)]++;
+      rows[Math.round(dx * sine + dy * cosine + diagonal / 2)]++;
+    }
+    let score = 0;
+    for (const count of rows) score += count * count;
+    for (const count of columns) score += count * count;
+    if (score > bestScore) { bestScore = score; bestAngle = angle; }
+  }
+  return Math.abs(bestAngle) < .5 ? 0 : bestAngle;
+}
+
 function Scanner({ onRead }: { onRead: (text: string) => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null), imageRef = useRef<HTMLImageElement | null>(null), startRef = useRef<{ x: number; y: number } | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null), imageRef = useRef<HTMLImageElement | null>(null), originalImageRef = useRef<HTMLImageElement | null>(null), startRef = useRef<{ x: number; y: number } | null>(null);
   const lockedScrollRef = useRef(0);
   const [fileName, setFileName] = useState(""), [box, setBox] = useState<Box | null>(null);
-  const [reading, setReading] = useState(false), [message, setMessage] = useState("");
+  const [reading, setReading] = useState(false), [adjusting, setAdjusting] = useState(false), [message, setMessage] = useState("");
   const [stageCount, setStageCount] = useState(1);
   const lockPage = () => {
     lockedScrollRef.current = window.scrollY;
@@ -92,6 +127,51 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
       unlockPage();
     };
   }, []);
+  const showImage = (image: HTMLImageElement, nextMessage: string) => {
+    imageRef.current = image;
+    const canvas = canvasRef.current;
+    if (!canvas) { setMessage("画像表示欄を準備できませんでした。もう一度選んでください。"); return; }
+    const scale = Math.min(1, 1100 / image.naturalWidth);
+    canvas.width = Math.round(image.naturalWidth * scale);
+    canvas.height = Math.round(image.naturalHeight * scale);
+    setBox(null);
+    setMessage(nextMessage);
+    requestAnimationFrame(() => draw(null));
+  };
+  const rotateImage = (degrees: number, nextMessage: string) => {
+    const image = imageRef.current;
+    if (!image || adjusting) return;
+    setAdjusting(true);
+    requestAnimationFrame(() => {
+      const radians = degrees * Math.PI / 180;
+      const sourceScale = Math.min(1, 2800 / Math.max(image.naturalWidth, image.naturalHeight));
+      const sourceWidth = image.naturalWidth * sourceScale, sourceHeight = image.naturalHeight * sourceScale;
+      const output = document.createElement("canvas");
+      output.width = Math.max(1, Math.ceil(Math.abs(sourceWidth * Math.cos(radians)) + Math.abs(sourceHeight * Math.sin(radians))));
+      output.height = Math.max(1, Math.ceil(Math.abs(sourceWidth * Math.sin(radians)) + Math.abs(sourceHeight * Math.cos(radians))));
+      const context = output.getContext("2d");
+      if (!context) { setAdjusting(false); setMessage("画像を補正できませんでした。"); return; }
+      context.fillStyle = "#fff"; context.fillRect(0, 0, output.width, output.height);
+      context.translate(output.width / 2, output.height / 2); context.rotate(radians);
+      context.drawImage(image, -sourceWidth / 2, -sourceHeight / 2, sourceWidth, sourceHeight);
+      const adjusted = new Image();
+      adjusted.onload = () => { showImage(adjusted, nextMessage); setAdjusting(false); };
+      adjusted.onerror = () => { setMessage("画像を補正できませんでした。"); setAdjusting(false); };
+      adjusted.src = output.toDataURL("image/jpeg", .94);
+    });
+  };
+  const straighten = () => {
+    const image = imageRef.current;
+    if (!image || adjusting) return;
+    setMessage("紙面の傾きを調べています…");
+    const angle = estimateStraighteningAngle(image);
+    if (!angle) { setMessage("大きな傾きは見つかりませんでした。そのまま囲めます。"); return; }
+    rotateImage(angle, `傾きを約${Math.abs(angle).toFixed(1)}度補正しました。記事を囲んでください。`);
+  };
+  const restoreOriginal = () => {
+    if (!originalImageRef.current || adjusting) return;
+    showImage(originalImageRef.current, "最初の画像に戻しました。記事を囲んでください。");
+  };
   const load = (file?: File) => {
     if (!file) return;
     setFileName(file.name);
@@ -100,15 +180,9 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
     setMessage("画像を読み込んでいます…");
     const image = new Image();
     image.onload = () => {
-      imageRef.current = image;
+      originalImageRef.current = image;
       requestAnimationFrame(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) { setMessage("画像表示欄を準備できませんでした。もう一度選んでください。"); return; }
-        const scale = Math.min(1, 1100 / image.naturalWidth);
-        canvas.width = Math.round(image.naturalWidth * scale);
-        canvas.height = Math.round(image.naturalHeight * scale);
-        setMessage("読みたい記事を、見出しから本文の終わりまで囲んでください。");
-        draw(null);
+        showImage(image, "向きを直してから、読みたい記事を囲んでください。");
         URL.revokeObjectURL(image.src);
       });
     };
@@ -185,5 +259,26 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
     } catch (cause) { setMessage("エラー：" + (cause instanceof Error ? cause.message : "読み取りに失敗しました。")); }
     finally { setReading(false); }
   };
-  return <section className="scanner"><div className="scanner-head"><SectionTitle number="1" title="新聞全体を1回撮る" note="紙面を真上から、明るい場所で撮ってください。"/><div className="file-buttons"><label><Camera size={18}/>カメラで撮る<input type="file" accept="image/*" capture="environment" onChange={(event) => load(event.target.files?.[0])}/></label><label className="sub"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" onChange={(event) => load(event.target.files?.[0])}/></label></div></div>{fileName && <div className="crop"><SectionTitle number="2" title="読みたい記事を囲む" note="指を離さず、記事の角から反対側の角まで動かします。どの角からでも囲めます。"/><div className="stage-picker"><span>この記事は何段ですか？</span><div>{[1,2,3,4].map((count) => <button type="button" key={count} className={stageCount === count ? "active" : ""} onClick={() => setStageCount(count)}><b>{count}</b>段{count === 1 && <span>（横書きの記事）</span>}</button>)}</div><small>縦書きは、紙面が上下に分かれている数を選びます。</small></div><div className="canvas-wrap"><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={(event) => { event.preventDefault(); const point = position(event); startRef.current = point; setBox({ x: point.x, y: point.y, w: 0, h: 0 }); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (!startRef.current) return; event.preventDefault(); const point = position(event); setBox({ x: startRef.current.x, y: startRef.current.y, w: point.x - startRef.current.x, h: point.y - startRef.current.y }); }} onPointerUp={(event) => { event.preventDefault(); startRef.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={(event) => { startRef.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}/></div><div className="scan-actions"><button className="reset" onClick={() => { setBox(null); setMessage("もう一度、記事を囲んでください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={!box || Math.abs(box.w) < 30 || Math.abs(box.h) < 30 || reading} onClick={read}><ScanLine size={20}/>{reading ? stageCount + "段を読み取り中…" : stageCount + "段の記事を読み取る"}</button></div>{message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}</div>}</section>;
+  return <section className="scanner">
+    <div className="scanner-head">
+      <SectionTitle number="1" title="新聞全体を1回撮る" note="紙面を真上から、明るい場所で撮ってください。"/>
+      <div className="file-buttons">
+        <label><Camera size={18}/>カメラで撮る<input type="file" accept="image/*" capture="environment" onChange={(event) => load(event.target.files?.[0])}/></label>
+        <label className="sub"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" onChange={(event) => load(event.target.files?.[0])}/></label>
+      </div>
+    </div>
+    {fileName && <div className="crop">
+      <SectionTitle number="2" title="写真の向きを整えて、記事を囲む" note="斜めなら自動補正を押してから、読みたい記事を囲みます。"/>
+      <div className="image-adjustments">
+        <button type="button" disabled={adjusting} onClick={() => rotateImage(-90, "左へ回転しました。記事を囲んでください。")}><RotateCcw size={17}/>左回転</button>
+        <button type="button" className="straighten" disabled={adjusting} onClick={straighten}><Sparkles size={17}/>{adjusting ? "補正中…" : "自動でまっすぐ"}</button>
+        <button type="button" disabled={adjusting} onClick={() => rotateImage(90, "右へ回転しました。記事を囲んでください。")}>右回転<RotateCcw className="rotate-right" size={17}/></button>
+        <button type="button" disabled={adjusting} onClick={restoreOriginal}>元に戻す</button>
+      </div>
+      <div className="stage-picker"><span>この記事は何段ですか？</span><div>{[1,2,3,4].map((count) => <button type="button" key={count} className={stageCount === count ? "active" : ""} onClick={() => setStageCount(count)}><b>{count}</b>段{count === 1 && <span>（横書きの記事）</span>}</button>)}</div><small>縦書きは、紙面が上下に分かれている数を選びます。</small></div>
+      <div className="canvas-wrap"><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={(event) => { event.preventDefault(); const point = position(event); startRef.current = point; setBox({ x: point.x, y: point.y, w: 0, h: 0 }); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (!startRef.current) return; event.preventDefault(); const point = position(event); setBox({ x: startRef.current.x, y: startRef.current.y, w: point.x - startRef.current.x, h: point.y - startRef.current.y }); }} onPointerUp={(event) => { event.preventDefault(); startRef.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={(event) => { startRef.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}/></div>
+      <div className="scan-actions"><button className="reset" onClick={() => { setBox(null); setMessage("もう一度、記事を囲んでください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={!box || Math.abs(box.w) < 30 || Math.abs(box.h) < 30 || reading} onClick={read}><ScanLine size={20}/>{reading ? stageCount + "段を読み取り中…" : stageCount + "段の記事を読み取る"}</button></div>
+      {message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}
+    </div>}
+  </section>;
 }
