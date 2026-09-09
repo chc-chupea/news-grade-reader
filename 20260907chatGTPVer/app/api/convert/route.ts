@@ -18,7 +18,14 @@ const schema = {
     },
     why: { type: "string" },
     relation: { type: "string" },
-    quiz: { type: "array", minItems: 3, maxItems: 3, items: { type: "string" } },
+    quiz: {
+      type: "array", minItems: 3, maxItems: 3,
+      items: {
+        type: "object", additionalProperties: false,
+        properties: { question: { type: "string" }, answer: { type: "string" } },
+        required: ["question", "answer"],
+      },
+    },
   },
   required: ["title", "body", "points", "words", "why", "relation", "quiz"],
 };
@@ -94,6 +101,8 @@ ${sectionRules[grade]}
 - title、bodyだけでなく、points、words、why、relation、quizも指定学年に合わせる。
 - pointsは大事なこと3点、quizは理解確認3問にする。
 - quizは必ず記事の内容だけで答えられる問いにする。記事にない知識や難しい推測を求めない。
+- quizの各項目はquestionとanswerの組にする。answerは記事本文から確認できる、指定学年に合った短い答えにする。
+- 原文から答えを確認できない問題は作らない。
 
 記事：
 ${text.trim()}`,
