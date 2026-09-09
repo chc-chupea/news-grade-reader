@@ -29,7 +29,7 @@ export default function Home() {
   };
   return <main>
     <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">精密OCR版 <b>Ver.2.6</b></div></header>
-    <section className="hero"><p><Sparkles size={16}/>新聞が、わかる。社会が、近くなる。</p><h1>新聞を1回撮って、<br/><em>読みたい記事を囲むだけ。</em></h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
+    <section className="hero"><p><Sparkles size={16}/>新聞が、わかる。社会が、近くなる。</p><h1>気になるニュースを、<br/>読みやすい<span className="word-highlight">言葉</span>へ。</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
       <div className="panel"><SectionTitle number="3" title="読み取った文章" note="直したいところがあるときだけ、ここで直せます。"/><textarea value={text} onChange={(event) => { setText(event.target.value); setResult(null); }} placeholder="読み取った新聞記事がここに入ります。記事を直接貼り付けても使えます。" maxLength={5000}/><div className="counter">{text.length.toLocaleString()} / 5,000字</div></div>
