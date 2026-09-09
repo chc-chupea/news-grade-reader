@@ -1,37 +1,116 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Camera, Check, ChevronRight, Copy, ImagePlus, RotateCcw, ScanLine, Sparkles } from "lucide-react";
 
-const sample=`広島市は1日、子どもたちが地域の歴史や文化を学べる新しい体験事業を10月から始めると発表した。対象は市内の小学4年生から中学3年生で、参加費は無料。参加者は専門家と一緒に資料館や史跡を巡り、調べた内容を新聞形式にまとめる。市は年間で約300人の参加を見込んでいる。担当者は「地域への関心を深め、自分の言葉で伝える力も育てたい」と話している。`;
-const grades=[{id:"小4",label:"小学4年",color:"#f28b61",goal:"何が起きたか"},{id:"小5",label:"小学5年",color:"#e9a93f",goal:"理由まで"},{id:"小6",label:"小学6年",color:"#8eb354",goal:"原因と結果"},{id:"中1",label:"中学1年",color:"#49a7a0",goal:"記事の要旨"},{id:"中2",label:"中学2年",color:"#4f83bd",goal:"論点と背景"},{id:"中3",label:"中学3年",color:"#7968a8",goal:"原文に近く"}];
-type Result={title:string;body:string;points:string[];words:[string,string][];why:string;relation:string;quiz:string[]};
-const common={words:[["史跡（しせき）","歴史上の出来事や建物の跡。"],["専門家（せんもんか）","ある分野をくわしく知っている人。"],["見込む（みこむ）","あらかじめ予想すること。"]] as [string,string][],why:"地域への関心を深め、自分で調べたことを伝える力を育てるためです。",relation:"対象となる子どもに、地域を調べて成果を発信する新しい学習機会ができます。"};
-const demo:Record<string,Result>={
-"小4":{...common,title:"広島市が、無料の学習を始めます",body:"広島市は10月から、新しい体験学習を始めます。参加できるのは、市内の小学4年生から中学3年生です。お金はかかりません。\n\n子どもたちは、くわしい人と資料館や昔のできごとがあった場所を回ります。そして、調べたことを新聞の形にまとめます。市は、1年間におよそ300人の参加を考えています。",points:["広島市が10月から始めます","小4から中3まで無料で参加できます","調べたことを新聞にまとめます"],words:[["資料館（しりょうかん）","昔の物や記録を集めて見せる場所。"],["史跡（しせき）","昔のできごとがあった場所。"],["参加費（さんかひ）","参加するために必要なお金。"],["専門家（せんもんか）","あることをよく知っている人。"],["見込む（みこむ）","このくらいになると考えること。"]],why:"子どもたちに、住んでいる地域のことを知ってもらうためです。",relation:"小学生や中学生が、地域のことを学べる新しい機会ができます。",quiz:["新しい体験学習は、いつ始まりますか？","参加するのにお金はかかりますか？","調べたことを何の形にまとめますか？"]},
-"小5":{...common,title:"地域を学び、新聞で伝える体験事業",body:"広島市は10月から、子どもが地域の歴史や文化を学ぶ新しい体験事業を始めます。対象は市内の小学4年生から中学3年生で、参加費は無料です。\n\n参加者は専門家と資料館や史跡を回ります。その後、調べた内容を新聞の形にまとめます。市は年間約300人の参加を見込んでいます。",points:["10月から無料の体験事業が始まります","専門家と資料館や史跡を巡ります","地域への関心と伝える力を育てます"],quiz:["参加できるのは誰ですか？","参加者はどこを巡りますか？","市がこの事業を行う目的は何ですか？"]},
-"小6":{...common,title:"広島市、地域学習の新事業を10月開始",body:"広島市は1日、市内の小学4年生から中学3年生を対象に、地域の歴史や文化を学ぶ体験事業を10月から始めると発表しました。参加費は無料です。\n\n参加者は専門家と資料館や史跡を巡り、調査した内容を新聞形式にまとめます。市は年間約300人の参加を見込んでいます。地域への関心と、自分の言葉で伝える力を育てるねらいがあります。",points:["小4〜中3を対象に10月から実施","調査結果を新聞形式にまとめる","年間約300人の参加を見込む"],quiz:["事業の対象と開始時期を答えましょう。","参加者は調査後に何をしますか？","この事業のねらいは何ですか？"]},
-"中1":{...common,title:"広島市、子ども向け地域学習事業を開始へ",body:"広島市は1日、子どもたちが地域の歴史や文化を学ぶ新たな体験事業を10月から始めると発表しました。対象は市内の小学4年生から中学3年生で、参加費は無料です。\n\n参加者は専門家と資料館や史跡を巡り、調べた内容を新聞形式にまとめます。市は年間約300人の参加を見込んでいます。",points:["地域の歴史・文化を学ぶ新事業","調査から新聞制作までを体験","年間約300人の参加を想定"],quiz:["記事の要旨を一文でまとめましょう。","活動はどんな順序で進みますか？","担当者が示した目的は何ですか？"]},
-"中2":{...common,title:"広島市、地域理解と発信力を育む体験事業",body:"広島市は1日、市内の小学4年生から中学3年生を対象に、地域の歴史や文化を学ぶ新たな体験事業を10月から開始すると発表しました。参加費は無料で、市は年間約300人の参加を見込んでいます。\n\n参加者は専門家とともに資料館や史跡を巡り、調査内容を新聞形式にまとめます。地域への関心と、情報を整理して伝える力を育てることが目的です。",points:["地域理解と情報発信を結びつけた事業","小4〜中3を対象に無料で実施","年間の参加見込みは約300人"],quiz:["二つの教育的な目的を説明しましょう。","市は事業規模をどう想定していますか？","新聞制作にはどんな力が必要ですか？"]},
-"中3":{...common,title:"広島市、児童生徒の地域学習事業を10月開始",body:sample,points:["地域の歴史・文化を学ぶ体験事業を新設","調査内容を新聞形式でまとめる構成","地域への関心と発信力の育成を目指す"],quiz:["事実と担当者の意見を分けましょう。","目的と活動内容はどう結び付いていますか？","約300人という数値から何が読み取れますか？"]}}
-function generic(text:string,grade:string):Result{const s=text.split(/(?<=[。！？])/).filter(Boolean);const n=grade==="小4"?4:grade==="小5"?5:grade==="小6"?6:8;return{...demo[grade],title:`この記事を「${grade}」向けに整理しました`,body:s.slice(0,n).join("\n\n")||demo[grade].body,points:s.slice(0,3).map(x=>x.replace(/[。！？]$/,"").slice(0,48))}}
+import { useEffect, useRef, useState } from "react";
+import { Camera, Check, Copy, ImagePlus, RotateCcw, ScanLine, Sparkles } from "lucide-react";
 
-export default function Home(){const[text,setText]=useState("");const[grade,setGrade]=useState("小4");const[result,setResult]=useState<Result|null>(null);const[resultGrade,setResultGrade]=useState("");const[tab,setTab]=useState("article");const[large,setLarge]=useState(false);const[copied,setCopied]=useState(false);const[converting,setConverting]=useState(false);const[convertError,setConvertError]=useState("");const selected=useMemo(()=>grades.find(g=>g.id===grade)!,[grade]);const clearResult=()=>{setResult(null);setResultGrade("");setConvertError("")};const appendRead=(next:string)=>{setText(current=>current.trim()?`${current.trimEnd()}\n\n${next.trim()}`:next.trim());clearResult()};const clearRead=()=>{setText("");clearResult()};const changeGrade=(nextGrade:string)=>{if(nextGrade===grade)return;setGrade(nextGrade);setResult(null);setResultGrade("");setTab("article");setConvertError("")};const convert=async()=>{if(!text.trim()||converting)return;const requestGrade=grade;setConverting(true);setResult(null);setResultGrade("");setConvertError("");try{let nextResult:Result;if(text.trim()===sample){nextResult=demo[requestGrade]}else{const response=await fetch("/api/convert",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,grade:requestGrade})});const data=await response.json();if(!response.ok)throw new Error(data.error||"変換に失敗しました。");nextResult=data}setResult(nextResult);setResultGrade(requestGrade);setTab("article");setTimeout(()=>document.getElementById("result")?.scrollIntoView({behavior:"smooth"}),50)}catch(error){setConvertError(error instanceof Error?error.message:"変換に失敗しました。")}finally{setConverting(false)}};return <main>
-<header className="topbar"><a className="brand" href="#"><span className="brand-mark">読</span><span>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></span></a><div className="version">かんたん読解版 <b>Ver.1.5</b></div></header>
-<section className="hero"><div className="eyebrow"><Sparkles size={15}/>新聞が、わかる。社会が、近くなる。</div><h1>紙の新聞を撮って、<br/><em>読みたい記事を<span className="vermillion">赤枠</span>で。</em></h1><p>新聞の記事を読み取り、学年に合ったことばでやさしくします。</p><div className="steps"><span><b>1</b>新聞を撮る</span><ChevronRight/><span><b>2</b>記事を囲む</span><ChevronRight/><span><b>3</b>学年を選ぶ</span></div></section>
-<NewspaperScanner onRead={appendRead} onClear={clearRead}/>
-<section className="workarea"><div className="card"><Title n="3" title="読み取った文章を確認する" sub="範囲を読み取るたびに、前の文章の下へ追加されます。"/><textarea value={text} onChange={e=>{setText(e.target.value);clearResult()}} placeholder="記事の形に合わせて囲んだ範囲が、読み取った順につながります。" maxLength={5000}/><div className="input-meta"><button onClick={()=>{setText(sample);clearResult()}}>例文を入れて試す</button><span>{text.length.toLocaleString()} / 5,000字</span></div></div><div className="card"><Title n="4" title="読む人の学年を選ぶ" sub="学年を変えると、前の変換結果は消えます。"/><div className="grade-grid">{grades.map(g=><button key={g.id} disabled={converting} onClick={()=>changeGrade(g.id)} className={grade===g.id?"grade active":"grade"} style={{"--grade":g.color} as React.CSSProperties}><i>{g.id}</i><strong>{g.label}</strong><small>{g.goal}</small>{grade===g.id&&<Check className="check" size={15}/>}</button>)}</div><button className="convert" disabled={!text.trim()||converting} onClick={convert}><Sparkles size={19}/>{converting?"AIが整理しています…":`${selected.label}向けにわかりやすくする`}</button>{convertError&&<p className="scan-status error">{convertError}</p>}<p className="privacy">画像と文章は保存しません。処理のためOpenAI APIへ送信します。</p></div></section>
-{result&&resultGrade===grade&&<ResultView result={result} selected={selected} tab={tab} setTab={setTab} large={large} setLarge={setLarge} copied={copied} setCopied={setCopied} reset={()=>{setResult(null);setResultGrade("");window.scrollTo({top:0,behavior:"smooth"})}}/>}
-<section className="principles"><p>このアプリが大切にすること</p><div><span><b>事実を変えない</b>数字・名前・発言を守ります</span><span><b>難しい言葉を消さない</b>ニュースの言葉として説明します</span><span><b>わからないことは推測しない</b>記事にない内容を付け足しません</span></div></section><footer><p>新聞記事 学年別AI変換基準 Ver.1.1</p><small>文部科学省の学習指導要領等を参考に独自に策定した試作基準です。文部科学省による認定・推奨を示すものではありません。</small></footer></main>}
-function Title({n,title,sub}:{n:string,title:string,sub:string}){return <div className="section-title"><span>{n}</span><div><h2>{title}</h2><p>{sub}</p></div></div>}
-function ResultView({result,selected,tab,setTab,large,setLarge,copied,setCopied,reset}:{result:Result;selected:typeof grades[number];tab:string;setTab:(v:string)=>void;large:boolean;setLarge:(v:boolean)=>void;copied:boolean;setCopied:(v:boolean)=>void;reset:()=>void}){const tabs=[['article','やさしい記事'],['why','どうして？'],['relation','私たちとの関係'],['quiz','わかったかな？']];const elementary=selected.id.startsWith("小");return <section id="result" className="result-wrap"><div className="result-head"><div><span className="result-badge" style={{background:selected.color}}>{selected.id}</span><p>変換結果</p><h2>{result.title}</h2></div><div className="result-actions"><button onClick={()=>setLarge(!large)}>文字を{large?"標準に":"大きく"}</button><button onClick={async()=>{await navigator.clipboard.writeText(result.body);setCopied(true);setTimeout(()=>setCopied(false),1500)}}>{copied?<Check size={15}/>:<Copy size={15}/>} {copied?"コピーしました":"コピー"}</button></div></div><div className="tabs">{tabs.map(([id,label])=><button className={tab===id?"active":""} onClick={()=>setTab(id)} key={id}>{label}</button>)}</div><article className={large?"result-body large":"result-body"}>{tab==='article'&&<><p className="converted">{result.body}</p><div className="summary"><h3>この記事の大事なこと</h3><ol>{result.points.map((p,i)=><li key={i}><b>{i+1}</b>{p}</li>)}</ol></div><div className="words"><h3><BookOpen size={19}/>ニュースの言葉</h3>{result.words.map(([w,d])=><dl key={w}><dt>{w}</dt><dd>{d}</dd></dl>)}</div></>}{tab==='why'&&<Panel title="なぜ、この取り組みをするの？" body={result.why}/>} {tab==='relation'&&<Panel title="このニュースと私たち" body={result.relation}/>} {tab==='quiz'&&<div className="quiz"><h3>{elementary?"記事を読んで答えてみよう":"記事を読んで考えてみよう"}</h3>{result.quiz.map((q,i)=><details key={q}><summary><b>Q{i+1}</b>{q}</summary><p>{elementary?"答えは記事の中にあります。もう一度探してみましょう。":"記事の中から、答えの手がかりを探してみましょう。"}</p></details>)}</div>}</article><button className="reset" onClick={reset}><RotateCcw size={15}/>別の記事を読む</button></section>}
-function Panel({title,body}:{title:string,body:string}){return <div className="single-panel"><span>{title}</span><p>{body}</p><small>記事に書かれている内容だけをもとに整理しています。</small></div>}
+type Box = { x: number; y: number; w: number; h: number };
+type Result = { title: string; body: string; points: string[]; words: [string, string][]; why: string; relation: string; quiz: string[] };
+const grades = [
+  { id: "小4", label: "小学4年", note: "やさしく短く" }, { id: "小5", label: "小学5年", note: "理由もわかる" },
+  { id: "小6", label: "小学6年", note: "原因と結果" }, { id: "中1", label: "中学1年", note: "要点を整理" },
+  { id: "中2", label: "中学2年", note: "背景も整理" }, { id: "中3", label: "中学3年", note: "原文に近く" },
+];
 
-type Box={x:number;y:number;w:number;h:number};
-function NewspaperScanner({onRead,onClear}:{onRead:(text:string)=>void;onClear:()=>void}){const canvas=useRef<HTMLCanvasElement>(null);const image=useRef<HTMLImageElement|null>(null);const start=useRef<{x:number;y:number}|null>(null);const[box,setBox]=useState<Box|null>(null);const[fileName,setFileName]=useState("");const[status,setStatus]=useState("");const[readCount,setReadCount]=useState(0);const[reading,setReading]=useState(false);
-const draw=(b=box)=>{const c=canvas.current,img=image.current;if(!c||!img)return;const ctx=c.getContext("2d")!;ctx.clearRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);if(b){const x=Math.min(b.x,b.x+b.w),y=Math.min(b.y,b.y+b.h),w=Math.abs(b.w),h=Math.abs(b.h),line=Math.max(5,c.width/180);ctx.fillStyle="#12202b55";ctx.fillRect(0,0,c.width,y);ctx.fillRect(0,y,x,h);ctx.fillRect(x+w,y,c.width-x-w,h);ctx.fillRect(0,y+h,c.width,c.height-y-h);ctx.strokeStyle="#e3342f";ctx.lineWidth=line;ctx.setLineDash([14,8]);ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);ctx.fillStyle="#fff";ctx.strokeStyle="#e3342f";ctx.lineWidth=line;for(const [px,py] of [[x,y],[x+w,y],[x,y+h],[x+w,y+h]]){ctx.beginPath();ctx.arc(px,py,line*1.5,0,Math.PI*2);ctx.fill();ctx.stroke()}const labelY=y>=38?y-34:y+line;ctx.fillStyle="#e3342f";ctx.fillRect(x,labelY,155,34);ctx.fillStyle="#fff";ctx.font="bold 20px sans-serif";ctx.fillText("この記事を読む",x+10,labelY+24)}};
-useEffect(()=>{draw()},[box]);
-const load=(f?:File)=>{if(!f)return;setFileName(f.name);setStatus("読みたい記事全体を、大まかに赤枠で囲んでください。");setBox(null);setReadCount(0);onClear();const img=new Image();img.onload=()=>{image.current=img;const c=canvas.current!;const max=1100,scale=Math.min(1,max/img.width);c.width=img.width*scale;c.height=img.height*scale;draw(null)};img.src=URL.createObjectURL(f)};
-const pos=(e:React.PointerEvent)=>{const c=canvas.current!,r=c.getBoundingClientRect();const x=(e.clientX-r.left)*c.width/r.width,y=(e.clientY-r.top)*c.height/r.height;return{x:Math.max(0,Math.min(c.width,x)),y:Math.max(0,Math.min(c.height,y))}};
-const read=async()=>{const img=image.current,display=canvas.current;if(!box||!img||!display||reading)return;setReading(true);setStatus("記事を読んでいます…");const sx=Math.max(0,Math.min(box.x,box.x+box.w))*img.naturalWidth/display.width,sy=Math.max(0,Math.min(box.y,box.y+box.h))*img.naturalHeight/display.height;const sw=Math.min(img.naturalWidth-sx,Math.abs(box.w)*img.naturalWidth/display.width),sh=Math.min(img.naturalHeight-sy,Math.abs(box.h)*img.naturalHeight/display.height);const crop=document.createElement("canvas"),maxSide=2600,scale=Math.min(1,maxSide/Math.max(sw,sh));crop.width=Math.max(1,Math.round(sw*scale));crop.height=Math.max(1,Math.round(sh*scale));const ctx=crop.getContext("2d")!;ctx.fillStyle="#fff";ctx.fillRect(0,0,crop.width,crop.height);ctx.drawImage(img,sx,sy,sw,sh,0,0,crop.width,crop.height);try{const imageDataUrl=crop.toDataURL("image/jpeg",.9);const response=await fetch("/api/ocr",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({imageDataUrl,readingMode:"article"})});const data=await response.json();if(!response.ok)throw new Error(data.error||"読み取りに失敗しました。");const textParts=[data.headline,data.body,data.caption].filter(Boolean);if(!textParts.length)throw new Error("文字を読み取れませんでした。赤枠を少し広げて、もう一度お試しください。");onRead(textParts.join("\n\n"));setReadCount(readCount+1);setBox(null);setStatus(data.review?.length?`読み取りました。確認してほしい所：${data.review.join("／")}`:"読み取りました。下の文章を確認してください。")}catch(error){setStatus(`エラー：${error instanceof Error?error.message:"読み取りに失敗しました。"}`)}finally{setReading(false)}};
-const restart=()=>{onClear();setReadCount(0);setBox(null);setStatus("文章を空にしました。記事全体をもう一度囲んでください。")};
-return <section className="scanner"><div className="scanner-title"><Title n="1" title="新聞全体を1回撮る" sub="紙面をなるべく真上から、明るい場所で撮ってください。"/><div className="file-actions"><label><Camera size={18}/>カメラで撮る<input type="file" accept="image/*" capture="environment" onChange={e=>load(e.target.files?.[0])}/></label><label className="secondary"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" onChange={e=>load(e.target.files?.[0])}/></label></div>{fileName&&<small>{fileName}</small>}</div>{fileName&&<div className="crop-area"><Title n="2" title="読みたい記事を赤枠で囲む" sub="読みたい記事が入るように、大まかに囲んでください。"/><div className="row-reader-guide"><b>{readCount?"読み取り済み":"準備完了"}</b><span>記事を囲む → 読み取る</span><button type="button" onClick={restart}><RotateCcw size={14}/>最初からやり直す</button></div><div className="canvas-wrap"><canvas ref={canvas} onPointerDown={e=>{e.preventDefault();const p=pos(e);start.current=p;setBox({x:p.x,y:p.y,w:0,h:0});e.currentTarget.setPointerCapture(e.pointerId)}} onPointerMove={e=>{if(!start.current)return;e.preventDefault();const p=pos(e),s=start.current;setBox({x:s.x,y:s.y,w:p.x-s.x,h:p.y-s.y})}} onPointerUp={e=>{start.current=null;e.currentTarget.releasePointerCapture(e.pointerId)}} onPointerCancel={()=>{start.current=null}}/></div><p className="quality-note">うまく読めないときは、赤枠を少し広げてもう一度試してください。</p><button className="scan-button" disabled={!box||Math.abs(box.w)<30||reading} onClick={read}><ScanLine size={20}/>{reading?"記事を読んでいます…":"この記事を読む"}</button>{status&&<p className={status.startsWith("エラー")?"scan-status error":"scan-status"}>{status}</p>}</div>}</section>}
+export default function Home() {
+  const [text, setText] = useState(""), [grade, setGrade] = useState("小4");
+  const [result, setResult] = useState<Result | null>(null), [converting, setConverting] = useState(false);
+  const [error, setError] = useState(""), [copied, setCopied] = useState(false);
+  const selectedGrade = grades.find((item) => item.id === grade)!;
+  const convert = async () => {
+    if (!text.trim() || converting) return;
+    setConverting(true); setResult(null); setError("");
+    try {
+      const response = await fetch("/api/convert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.trim(), grade }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "変換に失敗しました。");
+      setResult(data); setTimeout(() => document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" }), 50);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "変換に失敗しました。"); }
+    finally { setConverting(false); }
+  };
+  return <main>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">4段読取版 <b>Ver.2.1</b></div></header>
+    <section className="hero"><p><Sparkles size={16}/>新聞が、わかる。社会が、近くなる。</p><h1>新聞を1回撮って、<br/><em>読みたい記事を囲むだけ。</em></h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
+    <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
+    <section className="workspace">
+      <div className="panel"><SectionTitle number="3" title="読み取った文章を確認" note="間違いがあれば、ここで直接直せます。"/><textarea value={text} onChange={(event) => { setText(event.target.value); setResult(null); }} placeholder="読み取った新聞記事がここに入ります。記事を直接貼り付けても使えます。" maxLength={5000}/><div className="counter">{text.length.toLocaleString()} / 5,000字</div></div>
+      <div className="panel"><SectionTitle number="4" title="読む人の学年を選ぶ" note="学年に合う言葉と文の長さに整えます。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "向けにする"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像と文章は保存しません。処理のためOpenAI APIへ送信します。</p></div>
+    </section>
+    {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><p className="article">{result.body}</p><div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section><h3>わかったかな？</h3><ol>{result.quiz.map((question, index) => <li key={index}><b>Q{index + 1}</b>{question}</li>)}</ol></section></div></section>}
+    <footer>新聞記事 学年別AI変換アプリ　試作版</footer>
+  </main>;
+}
+
+function SectionTitle({ number, title, note }: { number: string; title: string; note: string }) {
+  return <div className="section-title"><b>{number}</b><div><h2>{title}</h2><p>{note}</p></div></div>;
+}
+
+function Scanner({ onRead }: { onRead: (text: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null), imageRef = useRef<HTMLImageElement | null>(null), startRef = useRef<{ x: number; y: number } | null>(null);
+  const [fileName, setFileName] = useState(""), [box, setBox] = useState<Box | null>(null);
+  const [reading, setReading] = useState(false), [message, setMessage] = useState("");
+  const draw = (selection = box) => {
+    const canvas = canvasRef.current, image = imageRef.current;
+    if (!canvas || !image) return;
+    const context = canvas.getContext("2d"); if (!context) return;
+    context.clearRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    if (!selection) return;
+    const x = Math.min(selection.x, selection.x + selection.w), y = Math.min(selection.y, selection.y + selection.h), w = Math.abs(selection.w), h = Math.abs(selection.h);
+    context.fillStyle = "rgba(16,30,40,.45)";
+    context.fillRect(0, 0, canvas.width, y); context.fillRect(0, y, x, h); context.fillRect(x + w, y, canvas.width - x - w, h); context.fillRect(0, y + h, canvas.width, canvas.height - y - h);
+    context.strokeStyle = "#df3e32"; context.lineWidth = Math.max(4, canvas.width / 220); context.setLineDash([14, 8]); context.strokeRect(x, y, w, h); context.setLineDash([]);
+  };
+  useEffect(() => { draw(); }, [box]);
+  const load = (file?: File) => {
+    if (!file) return;
+    const image = new Image();
+    image.onload = () => {
+      imageRef.current = image; const canvas = canvasRef.current; if (!canvas) return;
+      const scale = Math.min(1, 1100 / image.naturalWidth);
+      canvas.width = Math.round(image.naturalWidth * scale); canvas.height = Math.round(image.naturalHeight * scale);
+      setFileName(file.name); setBox(null); setMessage("読みたい記事を、見出しから本文の終わりまで囲んでください。"); draw(null); URL.revokeObjectURL(image.src);
+    };
+    image.onerror = () => setMessage("画像を開けませんでした。JPEGまたはPNGを選んでください。");
+    image.src = URL.createObjectURL(file);
+  };
+  const position = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current!, rect = canvas.getBoundingClientRect();
+    return { x: Math.max(0, Math.min(canvas.width, (event.clientX - rect.left) * canvas.width / rect.width)), y: Math.max(0, Math.min(canvas.height, (event.clientY - rect.top) * canvas.height / rect.height)) };
+  };
+  const read = async () => {
+    const image = imageRef.current, canvas = canvasRef.current; if (!image || !canvas || !box || reading) return;
+    setReading(true); setMessage("新聞に書かれている文字を読み取っています…");
+    try {
+      const left = Math.max(0, Math.min(box.x, box.x + box.w)), top = Math.max(0, Math.min(box.y, box.y + box.h));
+      const sourceX = left * image.naturalWidth / canvas.width, sourceY = top * image.naturalHeight / canvas.height;
+      const sourceW = Math.abs(box.w) * image.naturalWidth / canvas.width, sourceH = Math.abs(box.h) * image.naturalHeight / canvas.height;
+      const crop = document.createElement("canvas"), scale = Math.min(1, 2300 / Math.max(sourceW, sourceH));
+      crop.width = Math.max(1, Math.round(sourceW * scale)); crop.height = Math.max(1, Math.round(sourceH * scale));
+      const context = crop.getContext("2d"); if (!context) throw new Error("画像を処理できませんでした。");
+      context.fillStyle = "#fff"; context.fillRect(0, 0, crop.width, crop.height); context.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, crop.width, crop.height);
+      const tileCount = crop.height >= 700 ? 4 : 1;
+      const makeTiles = (quality: number) => Array.from({ length: tileCount }, (_, index) => {
+        if (tileCount === 1) return crop.toDataURL("image/jpeg", quality);
+        const baseHeight = crop.height / tileCount;
+        const overlap = Math.min(70, Math.round(baseHeight * .1));
+        const tileTop = Math.max(0, Math.floor(index * baseHeight - (index ? overlap : 0)));
+        const tileBottom = Math.min(crop.height, Math.ceil((index + 1) * baseHeight + (index < tileCount - 1 ? overlap : 0)));
+        const tile = document.createElement("canvas");
+        tile.width = crop.width; tile.height = tileBottom - tileTop;
+        const tileContext = tile.getContext("2d");
+        if (!tileContext) throw new Error("画像を分割できませんでした。");
+        tileContext.fillStyle = "#fff"; tileContext.fillRect(0, 0, tile.width, tile.height);
+        tileContext.drawImage(crop, 0, tileTop, crop.width, tile.height, 0, 0, tile.width, tile.height);
+        return tile.toDataURL("image/jpeg", quality);
+      });
+      let quality = .82, imageDataUrls = makeTiles(quality);
+      while (imageDataUrls.reduce((sum, value) => sum + value.length, 0) > 3_300_000 && quality > .5) { quality -= .08; imageDataUrls = makeTiles(quality); }
+      if (imageDataUrls.reduce((sum, value) => sum + value.length, 0) > 3_600_000) throw new Error("記事の範囲を少し小さくして、もう一度お試しください。");
+      const response = await fetch("/api/ocr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrls }) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || "読み取りに失敗しました。");
+      if (!data.text?.trim()) throw new Error("文字を読み取れませんでした。");
+      onRead(data.text.trim()); setMessage(data.review?.length ? "読み取りました。要確認：" + data.review.join("／") : "読み取りました。下の文章を確認してください。");
+    } catch (cause) { setMessage("エラー：" + (cause instanceof Error ? cause.message : "読み取りに失敗しました。")); }
+    finally { setReading(false); }
+  };
+  return <section className="scanner"><div className="scanner-head"><SectionTitle number="1" title="新聞全体を1回撮る" note="紙面を真上から、明るい場所で撮ってください。"/><div className="file-buttons"><label><Camera size={18}/>カメラで撮る<input type="file" accept="image/*" capture="environment" onChange={(event) => load(event.target.files?.[0])}/></label><label className="sub"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" onChange={(event) => load(event.target.files?.[0])}/></label></div></div>{fileName && <div className="crop"><SectionTitle number="2" title="読みたい記事を囲む" note="囲んだ記事は、内部で最大4段に分けて上から順に読みます。"/><div className="canvas-wrap"><canvas ref={canvasRef} onPointerDown={(event) => { event.preventDefault(); const point = position(event); startRef.current = point; setBox({ x: point.x, y: point.y, w: 0, h: 0 }); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (!startRef.current) return; const point = position(event); setBox({ x: startRef.current.x, y: startRef.current.y, w: point.x - startRef.current.x, h: point.y - startRef.current.y }); }} onPointerUp={(event) => { startRef.current = null; event.currentTarget.releasePointerCapture(event.pointerId); }}/></div><div className="scan-actions"><button className="reset" onClick={() => { setBox(null); setMessage("もう一度、記事を囲んでください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={!box || Math.abs(box.w) < 30 || Math.abs(box.h) < 30 || reading} onClick={read}><ScanLine size={20}/>{reading ? "最大4段を読み取り中…" : "この記事を読み取る"}</button></div>{message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}</div>}</section>;
+}
