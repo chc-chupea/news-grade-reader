@@ -28,7 +28,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">Google OCR版 <b>Ver.2.2</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">段数選択OCR版 <b>Ver.2.3</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞が、わかる。社会が、近くなる。</p><h1>新聞を1回撮って、<br/><em>読みたい記事を囲むだけ。</em></h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
@@ -48,6 +48,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null), imageRef = useRef<HTMLImageElement | null>(null), startRef = useRef<{ x: number; y: number } | null>(null);
   const [fileName, setFileName] = useState(""), [box, setBox] = useState<Box | null>(null);
   const [reading, setReading] = useState(false), [message, setMessage] = useState("");
+  const [stageCount, setStageCount] = useState(1);
   const draw = (selection = box) => {
     const canvas = canvasRef.current, image = imageRef.current;
     if (!canvas || !image) return;
@@ -64,6 +65,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
     if (!file) return;
     setFileName(file.name);
     setBox(null);
+    setStageCount(1);
     setMessage("画像を読み込んでいます…");
     const image = new Image();
     image.onload = () => {
@@ -88,7 +90,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
   };
   const read = async () => {
     const image = imageRef.current, canvas = canvasRef.current; if (!image || !canvas || !box || reading) return;
-    setReading(true); setMessage("Google OCRで最大4段を読み取っています…");
+    setReading(true); setMessage("Google OCRで" + stageCount + "段を読み取っています…");
     try {
       const left = Math.max(0, Math.min(box.x, box.x + box.w)), top = Math.max(0, Math.min(box.y, box.y + box.h));
       const sourceX = left * image.naturalWidth / canvas.width, sourceY = top * image.naturalHeight / canvas.height;
@@ -97,7 +99,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
       crop.width = Math.max(1, Math.round(sourceW * scale)); crop.height = Math.max(1, Math.round(sourceH * scale));
       const context = crop.getContext("2d"); if (!context) throw new Error("画像を処理できませんでした。");
       context.fillStyle = "#fff"; context.fillRect(0, 0, crop.width, crop.height); context.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, crop.width, crop.height);
-      const tileCount = crop.height >= 700 ? 4 : 1;
+      const tileCount = stageCount;
       const makeTiles = (quality: number) => Array.from({ length: tileCount }, (_, index) => {
         if (tileCount === 1) return crop.toDataURL("image/jpeg", quality);
         const baseHeight = crop.height / tileCount;
@@ -122,5 +124,5 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
     } catch (cause) { setMessage("エラー：" + (cause instanceof Error ? cause.message : "読み取りに失敗しました。")); }
     finally { setReading(false); }
   };
-  return <section className="scanner"><div className="scanner-head"><SectionTitle number="1" title="新聞全体を1回撮る" note="紙面を真上から、明るい場所で撮ってください。"/><div className="file-buttons"><label><Camera size={18}/>カメラで撮る<input type="file" accept="image/*" capture="environment" onChange={(event) => load(event.target.files?.[0])}/></label><label className="sub"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" onChange={(event) => load(event.target.files?.[0])}/></label></div></div>{fileName && <div className="crop"><SectionTitle number="2" title="読みたい記事を囲む" note="囲んだ記事は、内部で最大4段に分けて上から順に読みます。"/><div className="canvas-wrap"><canvas ref={canvasRef} onPointerDown={(event) => { event.preventDefault(); const point = position(event); startRef.current = point; setBox({ x: point.x, y: point.y, w: 0, h: 0 }); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (!startRef.current) return; const point = position(event); setBox({ x: startRef.current.x, y: startRef.current.y, w: point.x - startRef.current.x, h: point.y - startRef.current.y }); }} onPointerUp={(event) => { startRef.current = null; event.currentTarget.releasePointerCapture(event.pointerId); }}/></div><div className="scan-actions"><button className="reset" onClick={() => { setBox(null); setMessage("もう一度、記事を囲んでください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={!box || Math.abs(box.w) < 30 || Math.abs(box.h) < 30 || reading} onClick={read}><ScanLine size={20}/>{reading ? "最大4段を読み取り中…" : "この記事を読み取る"}</button></div>{message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}</div>}</section>;
+  return <section className="scanner"><div className="scanner-head"><SectionTitle number="1" title="新聞全体を1回撮る" note="紙面を真上から、明るい場所で撮ってください。"/><div className="file-buttons"><label><Camera size={18}/>カメラで撮る<input type="file" accept="image/*" capture="environment" onChange={(event) => load(event.target.files?.[0])}/></label><label className="sub"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" onChange={(event) => load(event.target.files?.[0])}/></label></div></div>{fileName && <div className="crop"><SectionTitle number="2" title="読みたい記事を囲む" note="記事を囲んだ後、実際の紙面に合わせて段数を選びます。"/><div className="stage-picker"><span>この記事は何段ですか？</span><div>{[1,2,3,4].map((count) => <button type="button" key={count} className={stageCount === count ? "active" : ""} onClick={() => setStageCount(count)}><b>{count}</b>段</button>)}</div><small>迷ったら1段。紙面が上下に分かれている数を選びます。</small></div><div className="canvas-wrap"><canvas ref={canvasRef} onPointerDown={(event) => { event.preventDefault(); const point = position(event); startRef.current = point; setBox({ x: point.x, y: point.y, w: 0, h: 0 }); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (!startRef.current) return; const point = position(event); setBox({ x: startRef.current.x, y: startRef.current.y, w: point.x - startRef.current.x, h: point.y - startRef.current.y }); }} onPointerUp={(event) => { startRef.current = null; event.currentTarget.releasePointerCapture(event.pointerId); }}/></div><div className="scan-actions"><button className="reset" onClick={() => { setBox(null); setMessage("もう一度、記事を囲んでください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={!box || Math.abs(box.w) < 30 || Math.abs(box.h) < 30 || reading} onClick={read}><ScanLine size={20}/>{reading ? stageCount + "段を読み取り中…" : stageCount + "段の記事を読み取る"}</button></div>{message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}</div>}</section>;
 }
