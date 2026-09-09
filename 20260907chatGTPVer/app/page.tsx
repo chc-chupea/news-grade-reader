@@ -28,7 +28,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">4段読取版 <b>Ver.2.1.1</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">Google OCR版 <b>Ver.2.2</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞が、わかる。社会が、近くなる。</p><h1>新聞を1回撮って、<br/><em>読みたい記事を囲むだけ。</em></h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
@@ -88,7 +88,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
   };
   const read = async () => {
     const image = imageRef.current, canvas = canvasRef.current; if (!image || !canvas || !box || reading) return;
-    setReading(true); setMessage("新聞に書かれている文字を読み取っています…");
+    setReading(true); setMessage("Google OCRで最大4段を読み取っています…");
     try {
       const left = Math.max(0, Math.min(box.x, box.x + box.w)), top = Math.max(0, Math.min(box.y, box.y + box.h));
       const sourceX = left * image.naturalWidth / canvas.width, sourceY = top * image.naturalHeight / canvas.height;
@@ -118,7 +118,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
       const response = await fetch("/api/ocr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrls }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "読み取りに失敗しました。");
       if (!data.text?.trim()) throw new Error("文字を読み取れませんでした。");
-      onRead(data.text.trim()); setMessage(data.review?.length ? "読み取りました。要確認：" + data.review.join("／") : "読み取りました。下の文章を確認してください。");
+      onRead(data.text.trim()); setMessage("Google OCRで" + (data.parts || 1) + "段を読み取りました。下の文章を確認してください。");
     } catch (cause) { setMessage("エラー：" + (cause instanceof Error ? cause.message : "読み取りに失敗しました。")); }
     finally { setReading(false); }
   };
