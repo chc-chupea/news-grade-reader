@@ -28,11 +28,11 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">画像照合OCR版 <b>Ver.3.2</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">入力案内版 <b>Ver.3.3</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞が、わかる。社会が、近くなる。</p><h1>気になるニュースを、<br/>読みやすい<span className="word-highlight">言葉</span>へ。</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
-      <div className="panel"><SectionTitle number="3" title="読み取った文章" note="直したいところがあるときだけ、ここで直せます。"/><textarea value={text} onChange={(event) => { setText(event.target.value); setResult(null); }} placeholder="読み取った新聞記事がここに入ります。記事を直接貼り付けても使えます。" maxLength={5000}/><div className="counter">{text.length.toLocaleString()} / 5,000字</div></div>
+      <div className="panel"><SectionTitle number="3" title="読み取った文章" note=""/><p className="digital-paste-note">デジタル記事のテキストは、ここにコピー＆ペーストしてください。</p><p className="edit-note">直したいところがある場合は、ここで直せます。</p><textarea value={text} onChange={(event) => { setText(event.target.value); setResult(null); }} placeholder="読み取った新聞記事、またはコピーしたデジタル記事をここに入れます。" maxLength={5000}/><div className="counter">{text.length.toLocaleString()} / 5,000字</div></div>
       <div className="panel"><SectionTitle number="4" title="読む人の学年を選ぶ" note="学年に合う言葉と文の長さに整えます。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "向けにする"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像と文章は保存しません。処理のためOpenAI APIへ送信します。</p></div>
     </section>
     {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><p className="article">{result.body}</p><div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem key={index} number={index + 1} question={item.question} answer={item.answer}/>)}</section></div></section>}
@@ -262,14 +262,14 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
   };
   return <section className="scanner">
     <div className="scanner-head">
-      <SectionTitle number="1" title="新聞全体を1回撮る" note="紙面を真上から、明るい場所で撮ってください。"/>
+      <SectionTitle number="1" title="記事を撮影する" note="紙面を真上から、明るい場所で撮ってください。"/>
       <div className="file-buttons">
         <label><Camera size={18}/>カメラで撮る<input type="file" accept="image/*" capture="environment" onChange={(event) => load(event.target.files?.[0])}/></label>
         <label className="sub"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" onChange={(event) => load(event.target.files?.[0])}/></label>
       </div>
     </div>
     {fileName && <div className="crop">
-      <SectionTitle number="2" title="写真の向きを整えて、記事を囲む" note="斜めなら自動補正を押してから、読みたい記事を囲みます。"/>
+      <SectionTitle number="2" title="写真の向きを整えて、記事を囲んで指定する" note={'指かマウスで記事を囲み、赤線の内側に入れてください。\n斜めなら「自動でまっすぐ」を押してから、読みたい記事を囲みます。'}/>
       <div className="image-adjustments">
         <button type="button" disabled={adjusting} onClick={() => rotateImage(-90, "左へ回転しました。記事を囲んでください。")}><RotateCcw size={17}/>左回転</button>
         <button type="button" className="straighten" disabled={adjusting} onClick={straighten}><Sparkles size={17}/>{adjusting ? "補正中…" : "自動でまっすぐ"}</button>
