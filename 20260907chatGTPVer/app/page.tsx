@@ -28,7 +28,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">写真補正版 <b>Ver.2.9</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">日本語紙面解析版 <b>Ver.3.0</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞が、わかる。社会が、近くなる。</p><h1>気になるニュースを、<br/>読みやすい<span className="word-highlight">言葉</span>へ。</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
@@ -254,7 +254,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "読み取りに失敗しました。");
       if (!data.text?.trim()) throw new Error("文字を読み取れませんでした。");
       onRead(data.text.trim());
-      const orderMessage = data.reordered ? " 縦書きの読む順番も整えました。" : "";
+      const orderMessage = data.layout === "vertical" ? " 縦書きの見出しと本文を、新聞の順番に整えました。" : " 横書きの順番に整えました。";
       setMessage("記事を読み取りました。" + orderMessage + "下の学年ボタンから、そのまま進めます。");
     } catch (cause) { setMessage("エラー：" + (cause instanceof Error ? cause.message : "読み取りに失敗しました。")); }
     finally { setReading(false); }
