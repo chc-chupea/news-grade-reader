@@ -28,7 +28,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">入力案内版 <b>Ver.3.3</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">新聞読解AI <b>Ver.3.3</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
@@ -262,7 +262,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
   };
   return <section className="scanner">
     <div className="scanner-head">
-      <SectionTitle number="1" title="記事を撮影する" note="紙面を真上から、明るい場所で撮ってください。"/>
+      <SectionTitle number="1" title="記事を撮影する" note="読みたい記事を真上から、明るい場所で撮ってください。"/>
       <div className="file-buttons">
         <label><Camera size={18}/>カメラで撮る<input type="file" accept="image/*" capture="environment" onChange={(event) => load(event.target.files?.[0])}/></label>
         <label className="sub"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" onChange={(event) => load(event.target.files?.[0])}/></label>
