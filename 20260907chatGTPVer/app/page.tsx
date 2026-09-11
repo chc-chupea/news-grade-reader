@@ -28,7 +28,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">新聞読解AI <b>Ver.3.3</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">新聞読解AI <b>Ver.3.4</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
@@ -90,20 +90,13 @@ function estimateStraighteningAngle(image: HTMLImageElement) {
 
 function Scanner({ onRead }: { onRead: (text: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null), imageRef = useRef<HTMLImageElement | null>(null), originalImageRef = useRef<HTMLImageElement | null>(null), startRef = useRef<{ x: number; y: number } | null>(null);
-  const lockedScrollRef = useRef(0);
+  const draftBoxRef = useRef<Box | null>(null), pointerIdRef = useRef<number | null>(null), gestureRectRef = useRef<DOMRect | null>(null);
   const [fileName, setFileName] = useState(""), [box, setBox] = useState<Box | null>(null);
   const [reading, setReading] = useState(false), [adjusting, setAdjusting] = useState(false), [message, setMessage] = useState("");
   const [stageCount, setStageCount] = useState(1);
-  const lockPage = () => {
-    lockedScrollRef.current = window.scrollY;
-    document.body.style.top = `-${lockedScrollRef.current}px`;
-    document.documentElement.classList.add("crop-locked");
-  };
+  const lockPage = () => document.documentElement.classList.add("crop-locked");
   const unlockPage = () => {
-    if (!document.documentElement.classList.contains("crop-locked")) return;
     document.documentElement.classList.remove("crop-locked");
-    document.body.style.top = "";
-    window.scrollTo(0, lockedScrollRef.current);
   };
   const draw = (selection = box) => {
     const canvas = canvasRef.current, image = imageRef.current;
@@ -118,14 +111,9 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
   };
   useEffect(() => { draw(); }, [box]);
   useEffect(() => {
-    const finishCrop = () => { startRef.current = null; unlockPage(); };
-    window.addEventListener("pointerup", finishCrop);
-    window.addEventListener("pointercancel", finishCrop);
-    return () => {
-      window.removeEventListener("pointerup", finishCrop);
-      window.removeEventListener("pointercancel", finishCrop);
-      unlockPage();
-    };
+    const stopTouchScroll = (event: TouchEvent) => { if (startRef.current) event.preventDefault(); };
+    document.addEventListener("touchmove", stopTouchScroll, { passive: false });
+    return () => { document.removeEventListener("touchmove", stopTouchScroll); unlockPage(); };
   }, []);
   const showImage = (image: HTMLImageElement, nextMessage: string) => {
     imageRef.current = image;
@@ -189,10 +177,51 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
     image.onerror = () => setMessage("画像を開けませんでした。JPEGまたはPNGを選んでください。");
     image.src = URL.createObjectURL(file);
   };
-  const position = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!startRef.current) lockPage();
-    const canvas = canvasRef.current!, rect = canvas.getBoundingClientRect();
+  const position = (event: React.PointerEvent<HTMLCanvasElement>, rect = gestureRectRef.current || event.currentTarget.getBoundingClientRect()) => {
+    const canvas = canvasRef.current!;
     return { x: Math.max(0, Math.min(canvas.width, (event.clientX - rect.left) * canvas.width / rect.width)), y: Math.max(0, Math.min(canvas.height, (event.clientY - rect.top) * canvas.height / rect.height)) };
+  };
+  const beginSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    gestureRectRef.current = rect;
+    pointerIdRef.current = event.pointerId;
+    const point = position(event, rect);
+    startRef.current = point;
+    draftBoxRef.current = { x: point.x, y: point.y, w: 0, h: 0 };
+    lockPage();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    draw(draftBoxRef.current);
+  };
+  const moveSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!startRef.current || pointerIdRef.current !== event.pointerId) return;
+    event.preventDefault();
+    const point = position(event);
+    draftBoxRef.current = { x: startRef.current.x, y: startRef.current.y, w: point.x - startRef.current.x, h: point.y - startRef.current.y };
+    draw(draftBoxRef.current);
+  };
+  const finishSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!startRef.current || pointerIdRef.current !== event.pointerId) return;
+    event.preventDefault();
+    const point = position(event);
+    const finalBox = { x: startRef.current.x, y: startRef.current.y, w: point.x - startRef.current.x, h: point.y - startRef.current.y };
+    draftBoxRef.current = finalBox;
+    draw(finalBox);
+    setBox(finalBox);
+    startRef.current = null;
+    pointerIdRef.current = null;
+    gestureRectRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    unlockPage();
+  };
+  const cancelSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (pointerIdRef.current !== event.pointerId) return;
+    if (draftBoxRef.current) { draw(draftBoxRef.current); setBox(draftBoxRef.current); }
+    startRef.current = null;
+    pointerIdRef.current = null;
+    gestureRectRef.current = null;
+    unlockPage();
   };
   const read = async () => {
     const image = imageRef.current, canvas = canvasRef.current; if (!image || !canvas || !box || reading) return;
@@ -277,7 +306,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
         <button type="button" disabled={adjusting} onClick={restoreOriginal}>元に戻す</button>
       </div>
       <div className="stage-picker"><span>この記事は何段ですか？</span><div>{[1,2,3,4].map((count) => <button type="button" key={count} className={stageCount === count ? "active" : ""} onClick={() => setStageCount(count)}><b>{count}</b>段{count === 1 && <span>（横書きの記事）</span>}</button>)}</div><small>縦書きは、紙面が上下に分かれている数を選びます。</small></div>
-      <div className="canvas-wrap"><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={(event) => { event.preventDefault(); const point = position(event); startRef.current = point; setBox({ x: point.x, y: point.y, w: 0, h: 0 }); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (!startRef.current) return; event.preventDefault(); const point = position(event); setBox({ x: startRef.current.x, y: startRef.current.y, w: point.x - startRef.current.x, h: point.y - startRef.current.y }); }} onPointerUp={(event) => { event.preventDefault(); startRef.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={(event) => { startRef.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}/></div>
+      <div className="canvas-wrap"><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection} onPointerCancel={cancelSelection}/></div>
       <div className="scan-actions"><button className="reset" onClick={() => { setBox(null); setMessage("もう一度、記事を囲んでください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={!box || Math.abs(box.w) < 30 || Math.abs(box.h) < 30 || reading} onClick={read}><ScanLine size={20}/>{reading ? stageCount + "段を読み取り中…" : stageCount + "段の記事を読み取る"}</button></div>
       {message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}
     </div>}
