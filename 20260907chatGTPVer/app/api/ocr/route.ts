@@ -260,11 +260,22 @@ function mergeParts(parts: string[]) {
   }, "");
 }
 
+function chooseBestPass<T extends { text: string; confidence: number; uncertain: number; regions: PositionedParagraph[] }>(primary: T, enhanced: T) {
+  const primaryLength = primary.text.replace(/\s/g, "").length, enhancedLength = enhanced.text.replace(/\s/g, "").length;
+  const primaryUncertain = primary.uncertain / Math.max(1, primaryLength), enhancedUncertain = enhanced.uncertain / Math.max(1, enhancedLength);
+  const enhancedFindsMore = enhancedLength > primaryLength * 1.035 && enhanced.confidence >= primary.confidence - .04;
+  const primaryFindsMore = primaryLength > enhancedLength * 1.035 && primary.confidence >= enhanced.confidence - .04;
+  const selected = enhancedFindsMore ? enhanced : primaryFindsMore ? primary
+    : enhanced.confidence - enhancedUncertain > primary.confidence - primaryUncertain ? enhanced : primary;
+  selected.regions.forEach((region) => { region.stage = 0; });
+  return selected;
+}
+
 export async function POST(request: Request) {
   try {
     const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
     if (!apiKey) return Response.json({ error: "VercelにGOOGLE_CLOUD_VISION_API_KEYを登録してください。" }, { status: 503 });
-    const { imageDataUrls } = await request.json() as { imageDataUrls?: string[] };
+    const { imageDataUrls, dualPass } = await request.json() as { imageDataUrls?: string[]; dualPass?: boolean };
     if (!imageDataUrls?.length || imageDataUrls.length > 4 || imageDataUrls.some((image) => !image.startsWith("data:image/"))) {
       return Response.json({ error: "画像を確認できませんでした。もう一度選び直してください。" }, { status: 400 });
     }
@@ -296,7 +307,9 @@ export async function POST(request: Request) {
       return Response.json({ error: "一部の段を読み取れませんでした。もう一度お試しください。" }, { status: 502 });
     }
 
-    const stages = (data?.responses || []).map((item, index) => extractStage(item, index)).filter((item) => item.text);
+    const extracted = (data?.responses || []).map((item, index) => extractStage(item, index)).filter((item) => item.text);
+    const dualPassUsed = Boolean(dualPass && extracted.length === 2);
+    const stages = dualPassUsed ? [chooseBestPass(extracted[0], extracted[1])] : extracted;
     const fallbackText = mergeParts(stages.map((item) => item.text));
     const regions = stages.flatMap((item) => item.regions);
     const organized = await organizeNewspaper(regions, imageDataUrls);
@@ -310,7 +323,7 @@ export async function POST(request: Request) {
     }).join("\n");
     const fallbackLength = fallbackText.replace(/\s/g, "").length;
     const organizedLength = organizedText.replace(/\s/g, "").length;
-    const organizedByAI = Boolean(organized && validIds.length && organizedLength >= fallbackLength * .55);
+    const organizedByAI = Boolean(organized && validIds.length && organizedLength >= fallbackLength * .9);
     const text = organizedByAI ? organizedText : fallbackText;
     if (!text) return Response.json({ error: "文字を検出できませんでした。紙面に近づいて、明るい場所で撮ってください。" }, { status: 422 });
     const confidence = stages.length ? stages.reduce((sum, item) => sum + item.confidence, 0) / stages.length : 0;
@@ -318,7 +331,7 @@ export async function POST(request: Request) {
     const reordered = stages.filter((item) => item.reordered).length;
     const fallbackLayout = stages.filter((item) => item.layout === "vertical").length >= Math.ceil(stages.length / 2) ? "vertical" : "horizontal";
     const layout = organizedByAI ? organized!.layout : fallbackLayout;
-    return Response.json({ text, parts: stages.length, confidence: Math.round(confidence * 100), uncertain, reordered, layout, organizedByAI, correctedCount: organizedByAI ? correctedCount : 0 });
+    return Response.json({ text, parts: stages.length, confidence: Math.round(confidence * 100), uncertain, reordered, layout, organizedByAI, correctedCount: organizedByAI ? correctedCount : 0, dualPassUsed });
   } catch (error) {
     console.error("Google Vision OCR failed", error);
     return Response.json({ error: "OCR処理に失敗しました。もう一度お試しください。" }, { status: 500 });

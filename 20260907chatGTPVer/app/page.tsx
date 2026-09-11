@@ -28,7 +28,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">新聞読解AI <b>Ver.3.4</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">新聞読解AI <b>Ver.3.5</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
@@ -225,22 +225,22 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
   };
   const read = async () => {
     const image = imageRef.current, canvas = canvasRef.current; if (!image || !canvas || !box || reading) return;
-    setReading(true); setMessage("Google OCRで" + stageCount + "段を読み取っています…");
+    setReading(true); setMessage("高画質で記事を準備しています…");
     try {
       const left = Math.max(0, Math.min(box.x, box.x + box.w)), top = Math.max(0, Math.min(box.y, box.y + box.h));
       const sourceX = left * image.naturalWidth / canvas.width, sourceY = top * image.naturalHeight / canvas.height;
       const sourceW = Math.abs(box.w) * image.naturalWidth / canvas.width, sourceH = Math.abs(box.h) * image.naturalHeight / canvas.height;
-      const crop = document.createElement("canvas"), scale = Math.min(1, 2300 / Math.max(sourceW, sourceH));
-      crop.width = Math.max(1, Math.round(sourceW * scale)); crop.height = Math.max(1, Math.round(sourceH * scale));
-      const context = crop.getContext("2d"); if (!context) throw new Error("画像を処理できませんでした。");
-      context.fillStyle = "#fff"; context.fillRect(0, 0, crop.width, crop.height); context.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, crop.width, crop.height);
+      const analysis = document.createElement("canvas"), analysisScale = Math.min(1, 1800 / Math.max(sourceW, sourceH));
+      analysis.width = Math.max(1, Math.round(sourceW * analysisScale)); analysis.height = Math.max(1, Math.round(sourceH * analysisScale));
+      const context = analysis.getContext("2d", { willReadFrequently: true }); if (!context) throw new Error("画像を処理できませんでした。");
+      context.fillStyle = "#fff"; context.fillRect(0, 0, analysis.width, analysis.height); context.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, analysis.width, analysis.height);
       const tileCount = stageCount;
-      const pixels = context.getImageData(0, 0, crop.width, crop.height).data;
+      const pixels = context.getImageData(0, 0, analysis.width, analysis.height).data;
       const rowInk = (row: number) => {
         let dark = 0, checked = 0;
-        for (let y = Math.max(0, row - 2); y <= Math.min(crop.height - 1, row + 2); y++) {
-          for (let x = 0; x < crop.width; x += 4) {
-            const offset = (y * crop.width + x) * 4;
+        for (let y = Math.max(0, row - 2); y <= Math.min(analysis.height - 1, row + 2); y++) {
+          for (let x = 0; x < analysis.width; x += 4) {
+            const offset = (y * analysis.width + x) * 4;
             const brightness = pixels[offset] * .299 + pixels[offset + 1] * .587 + pixels[offset + 2] * .114;
             if (brightness < 205) dark++;
             checked++;
@@ -250,10 +250,10 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
       };
       const boundaries = [0];
       for (let index = 1; index < tileCount; index++) {
-        const ideal = crop.height * index / tileCount;
-        const radius = Math.max(24, crop.height / tileCount * .28);
+        const ideal = analysis.height * index / tileCount;
+        const radius = Math.max(24, analysis.height / tileCount * .28);
         const from = Math.max(boundaries[index - 1] + 30, Math.floor(ideal - radius));
-        const to = Math.min(crop.height - 30, Math.ceil(ideal + radius));
+        const to = Math.min(analysis.height - 30, Math.ceil(ideal + radius));
         let bestRow = Math.round(ideal), bestScore = Number.POSITIVE_INFINITY;
         for (let row = from; row <= to; row += 2) {
           const distancePenalty = Math.abs(row - ideal) / radius * .012;
@@ -262,30 +262,60 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
         }
         boundaries.push(bestRow);
       }
-      boundaries.push(crop.height);
-      const makeTiles = (quality: number) => Array.from({ length: tileCount }, (_, index) => {
-        if (tileCount === 1) return crop.toDataURL("image/jpeg", quality);
-        const overlap = Math.min(18, Math.round(crop.height / tileCount * .02));
+      boundaries.push(analysis.height);
+      const readParts: string[] = [];
+      let correctionTotal = 0, dualPassTotal = 0, organizedTotal = 0;
+      for (let index = 0; index < tileCount; index++) {
+        setMessage(`${index + 1}/${tileCount}段目を二重に読み取っています…`);
+        const overlap = Math.min(24, Math.round(analysis.height / tileCount * .025));
         const tileTop = Math.max(0, boundaries[index] - (index ? overlap : 0));
-        const tileBottom = Math.min(crop.height, boundaries[index + 1] + (index < tileCount - 1 ? overlap : 0));
+        const tileBottom = Math.min(analysis.height, boundaries[index + 1] + (index < tileCount - 1 ? overlap : 0));
+        const tileSourceY = sourceY + tileTop / analysis.height * sourceH;
+        const tileSourceH = (tileBottom - tileTop) / analysis.height * sourceH;
+        const outputScale = Math.min(1.65, 3400 / Math.max(sourceW, tileSourceH));
         const tile = document.createElement("canvas");
-        tile.width = crop.width; tile.height = tileBottom - tileTop;
-        const tileContext = tile.getContext("2d");
-        if (!tileContext) throw new Error("画像を分割できませんでした。");
+        tile.width = Math.max(1, Math.round(sourceW * outputScale)); tile.height = Math.max(1, Math.round(tileSourceH * outputScale));
+        const tileContext = tile.getContext("2d", { willReadFrequently: true }); if (!tileContext) throw new Error("画像を分割できませんでした。");
         tileContext.fillStyle = "#fff"; tileContext.fillRect(0, 0, tile.width, tile.height);
-        tileContext.drawImage(crop, 0, tileTop, crop.width, tile.height, 0, 0, tile.width, tile.height);
-        return tile.toDataURL("image/jpeg", quality);
-      });
-      let quality = .82, imageDataUrls = makeTiles(quality);
-      while (imageDataUrls.reduce((sum, value) => sum + value.length, 0) > 3_300_000 && quality > .5) { quality -= .08; imageDataUrls = makeTiles(quality); }
-      if (imageDataUrls.reduce((sum, value) => sum + value.length, 0) > 3_600_000) throw new Error("記事の範囲を少し小さくして、もう一度お試しください。");
-      const response = await fetch("/api/ocr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrls }) });
-      const data = await response.json(); if (!response.ok) throw new Error(data.error || "読み取りに失敗しました。");
-      if (!data.text?.trim()) throw new Error("文字を読み取れませんでした。");
-      onRead(data.text.trim());
-      const correctionMessage = data.correctedCount ? ` 画像と照合して、明確な誤読を${data.correctedCount}か所補正しました。` : "";
-      const orderMessage = data.organizedByAI ? " AIが画像と文章のつながりを確認し、新聞の順番に整えました。" + correctionMessage : data.layout === "vertical" ? " 縦書きの見出しと本文を、新聞の順番に整えました。" : " 横書きの順番に整えました。";
-      setMessage("記事を読み取りました。" + orderMessage + "下の学年ボタンから、そのまま進めます。");
+        tileContext.imageSmoothingEnabled = true; tileContext.imageSmoothingQuality = "high";
+        tileContext.drawImage(image, sourceX, tileSourceY, sourceW, tileSourceH, 0, 0, tile.width, tile.height);
+        const enhanced = document.createElement("canvas"); enhanced.width = tile.width; enhanced.height = tile.height;
+        const enhancedContext = enhanced.getContext("2d"); if (!enhancedContext) throw new Error("画像を補正できませんでした。");
+        const imageData = tileContext.getImageData(0, 0, tile.width, tile.height), enhancedPixels = imageData.data;
+        for (let offset = 0; offset < enhancedPixels.length; offset += 4) {
+          const gray = enhancedPixels[offset] * .299 + enhancedPixels[offset + 1] * .587 + enhancedPixels[offset + 2] * .114;
+          const value = Math.max(0, Math.min(255, (gray - 128) * 1.24 + 128));
+          enhancedPixels[offset] = value; enhancedPixels[offset + 1] = value; enhancedPixels[offset + 2] = value;
+        }
+        enhancedContext.putImageData(imageData, 0, 0);
+        let quality = .94, imageDataUrls = [tile.toDataURL("image/jpeg", quality), enhanced.toDataURL("image/jpeg", quality)];
+        while (imageDataUrls.reduce((sum, value) => sum + value.length, 0) > 3_500_000 && quality > .78) {
+          quality -= .04;
+          imageDataUrls = [tile.toDataURL("image/jpeg", quality), enhanced.toDataURL("image/jpeg", quality)];
+        }
+        if (imageDataUrls.reduce((sum, value) => sum + value.length, 0) > 3_700_000) imageDataUrls = [enhanced.toDataURL("image/jpeg", .9)];
+        const response = await fetch("/api/ocr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrls, dualPass: imageDataUrls.length === 2 }) });
+        const data = await response.json(); if (!response.ok) throw new Error(data.error || `${index + 1}段目の読み取りに失敗しました。`);
+        if (!data.text?.trim()) throw new Error(`${index + 1}段目の文字を読み取れませんでした。`);
+        readParts.push(data.text.trim());
+        correctionTotal += data.correctedCount || 0;
+        dualPassTotal += data.dualPassUsed ? 1 : 0;
+        organizedTotal += data.organizedByAI ? 1 : 0;
+      }
+      const mergedText = readParts.reduce((merged, part) => {
+        if (!merged) return part;
+        const currentLines = merged.split(/\r?\n/), nextLines = part.split(/\r?\n/);
+        let overlap = 0;
+        for (let size = Math.min(10, currentLines.length, nextLines.length); size >= 1; size--) {
+          if (currentLines.slice(-size).join("") === nextLines.slice(0, size).join("")) { overlap = size; break; }
+        }
+        return [...currentLines, ...nextLines.slice(overlap)].join("\n");
+      }, "");
+      onRead(mergedText);
+      const correctionMessage = correctionTotal ? ` 明確な誤読を${correctionTotal}か所補正しました。` : "";
+      const dualMessage = dualPassTotal === tileCount ? "各段を通常画像と補正画像で二重に照合しました。" : "高画質画像を優先して読み取りました。";
+      const orderMessage = organizedTotal ? " 新聞の順番を確認し、文章の欠落を防いで整えました。" : "";
+      setMessage("記事を読み取りました。" + dualMessage + orderMessage + correctionMessage + " 下の学年ボタンから進めます。");
     } catch (cause) { setMessage("エラー：" + (cause instanceof Error ? cause.message : "読み取りに失敗しました。")); }
     finally { setReading(false); }
   };
