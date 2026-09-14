@@ -88,6 +88,50 @@ function estimateStraighteningAngle(image: HTMLImageElement) {
   return Math.abs(bestAngle) < .5 ? 0 : bestAngle;
 }
 
+function smoothPath(points: Point[]) {
+  if (points.length < 3) return points;
+  return points.map((point, index) => {
+    if (index === 0 || index === points.length - 1) return point;
+    const before = points[index - 1], after = points[index + 1];
+    return { x: (before.x + point.x * 2 + after.x) / 4, y: (before.y + point.y * 2 + after.y) / 4 };
+  });
+}
+
+function distanceFromLine(point: Point, start: Point, end: Point) {
+  const dx = end.x - start.x, dy = end.y - start.y;
+  if (!dx && !dy) return Math.hypot(point.x - start.x, point.y - start.y);
+  const ratio = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(point.x - (start.x + ratio * dx), point.y - (start.y + ratio * dy));
+}
+
+function simplifyPath(points: Point[], tolerance: number): Point[] {
+  if (points.length < 3) return points;
+  let farthest = 0, farthestIndex = 0;
+  for (let index = 1; index < points.length - 1; index++) {
+    const distance = distanceFromLine(points[index], points[0], points[points.length - 1]);
+    if (distance > farthest) { farthest = distance; farthestIndex = index; }
+  }
+  if (farthest <= tolerance) return [points[0], points[points.length - 1]];
+  const before = simplifyPath(points.slice(0, farthestIndex + 1), tolerance);
+  const after = simplifyPath(points.slice(farthestIndex), tolerance);
+  return [...before.slice(0, -1), ...after];
+}
+
+function stabilizePath(points: Point[], width: number, height: number) {
+  if (points.length < 3) return points;
+  const smoothed = smoothPath(smoothPath(points));
+  const simplified = simplifyPath(smoothed, Math.max(1.5, Math.hypot(width, height) / 360));
+  const stabilized: Point[] = [simplified[0]];
+  for (const point of simplified.slice(1)) {
+    const previous = stabilized[stabilized.length - 1];
+    const dx = point.x - previous.x, dy = point.y - previous.y;
+    if (Math.abs(dx) < Math.abs(dy) * .14) stabilized.push({ x: previous.x, y: point.y });
+    else if (Math.abs(dy) < Math.abs(dx) * .14) stabilized.push({ x: point.x, y: previous.y });
+    else stabilized.push(point);
+  }
+  return stabilized;
+}
+
 function Scanner({ onRead }: { onRead: (text: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null), imageRef = useRef<HTMLImageElement | null>(null), originalImageRef = useRef<HTMLImageElement | null>(null);
   const draftPathRef = useRef<Point[]>([]), pointerIdRef = useRef<number | null>(null), gestureRectRef = useRef<DOMRect | null>(null);
@@ -206,7 +250,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
     draftPathRef.current = [point];
     lockPage();
     event.currentTarget.setPointerCapture(event.pointerId);
-    draw(draftPathRef.current, false);
+    draw(smoothPath(draftPathRef.current), false);
   };
   const moveSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!draftPathRef.current.length || pointerIdRef.current !== event.pointerId) return;
@@ -215,13 +259,13 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
     const previous = draftPathRef.current[draftPathRef.current.length - 1];
     if (Math.hypot(point.x - previous.x, point.y - previous.y) < Math.max(2, canvasRef.current!.width / 500)) return;
     draftPathRef.current.push(point);
-    draw(draftPathRef.current, false);
+    draw(smoothPath(draftPathRef.current), false);
   };
   const finishSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!draftPathRef.current.length || pointerIdRef.current !== event.pointerId) return;
     event.preventDefault();
     const point = position(event);
-    const finalPath = [...draftPathRef.current, point];
+    const finalPath = stabilizePath([...draftPathRef.current, point], event.currentTarget.width, event.currentTarget.height);
     setSelectionPath(finalPath);
     draw(finalPath);
     draftPathRef.current = [];
