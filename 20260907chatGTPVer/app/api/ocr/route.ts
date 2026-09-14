@@ -282,7 +282,7 @@ export async function POST(request: Request) {
   try {
     const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
     if (!apiKey) return Response.json({ error: "VercelにGOOGLE_CLOUD_VISION_API_KEYを登録してください。" }, { status: 503 });
-    const { imageDataUrls, dualPass, layoutHint, previousText = "", partIndex = 0, partCount = 1 } = await request.json() as { imageDataUrls?: string[]; dualPass?: boolean; layoutHint?: "vertical" | "auto"; previousText?: string; partIndex?: number; partCount?: number };
+    const { imageDataUrls, dualPass, layoutHint, previousText = "", partIndex = 0, partCount = 1, googleOnly = false } = await request.json() as { imageDataUrls?: string[]; dualPass?: boolean; layoutHint?: "vertical" | "auto"; previousText?: string; partIndex?: number; partCount?: number; googleOnly?: boolean };
     if (!imageDataUrls?.length || imageDataUrls.length > 4 || imageDataUrls.some((image) => !image.startsWith("data:image/"))) {
       return Response.json({ error: "画像を確認できませんでした。もう一度選び直してください。" }, { status: 400 });
     }
@@ -319,7 +319,7 @@ export async function POST(request: Request) {
     const stages = dualPassUsed ? [chooseBestPass(extracted[0], extracted[1])] : extracted;
     const fallbackText = mergeParts(stages.map((item) => item.text));
     const regions = stages.flatMap((item) => item.regions);
-    const transcription = await transcribeNewspaper(regions, imageDataUrls[0], { previousText: previousText.slice(-900), partIndex: Math.max(0, partIndex), partCount: Math.max(1, partCount), layoutHint: layoutHint === "vertical" ? "vertical" : "auto" });
+    const transcription = googleOnly ? null : await transcribeNewspaper(regions, imageDataUrls[0], { previousText: previousText.slice(-900), partIndex: Math.max(0, partIndex), partCount: Math.max(1, partCount), layoutHint: layoutHint === "vertical" ? "vertical" : "auto" });
     const transcribedText = transcription ? [transcription.headline.trim(), transcription.body.trim()].filter(Boolean).join("\n") : "";
     const fallbackLength = fallbackText.replace(/\s/g, "").length;
     const transcribedLength = transcribedText.replace(/\s/g, "").length;
@@ -333,7 +333,13 @@ export async function POST(request: Request) {
     const layout = organizedByAI ? transcription!.layout : fallbackLayout;
     const aiStatus = organizedByAI ? "used" : transcription ? "rejected" : "unavailable";
     console.info("Newspaper image reading", { aiStatus, fallbackLength, transcribedLength, partIndex, partCount, aiComplete: transcription?.complete });
-    return Response.json({ text, parts: stages.length, confidence: Math.round(confidence * 100), uncertain, reordered, layout, organizedByAI, aiStatus, correctedCount: 0, dualPassUsed, uncertainSegments: organizedByAI ? transcription!.uncertainSegments : [] });
+    const ocrRegions = regions.map((item) => ({
+      id: `part${partIndex + 1}-${item.id}`, part: partIndex + 1, text: item.text,
+      x: Math.round(item.left), y: Math.round(item.top), width: Math.round(item.width), height: Math.round(item.height),
+      characterSize: Math.round(item.charSize * 10) / 10, direction: item.direction,
+      confidence: Math.round(item.confidence * 100), uncertainCharacters: item.uncertain,
+    }));
+    return Response.json({ text, parts: stages.length, confidence: Math.round(confidence * 100), uncertain, reordered, layout, organizedByAI, aiStatus, correctedCount: 0, dualPassUsed, uncertainSegments: organizedByAI ? transcription!.uncertainSegments : [], ocrRegions });
   } catch (error) {
     console.error("Google Vision OCR failed", error);
     return Response.json({ error: "OCR処理に失敗しました。もう一度お試しください。" }, { status: 500 });
