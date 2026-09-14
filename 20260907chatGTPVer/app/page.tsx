@@ -98,25 +98,27 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
   const unlockPage = () => {
     document.documentElement.classList.remove("crop-locked");
   };
-  const draw = (path = selectionPath) => {
+  const draw = (path = selectionPath, completed = true) => {
     const canvas = canvasRef.current, image = imageRef.current;
     if (!canvas || !image) return;
     const context = canvas.getContext("2d"); if (!context) return;
     context.clearRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
     if (path.length < 2) return;
-    context.save();
+    if (completed && path.length > 2) {
+      context.save();
+      context.beginPath();
+      context.rect(0, 0, canvas.width, canvas.height);
+      context.moveTo(path[0].x, path[0].y);
+      for (const point of path.slice(1)) context.lineTo(point.x, point.y);
+      context.closePath();
+      context.fillStyle = "rgba(16,30,40,.45)";
+      context.fill("evenodd");
+      context.restore();
+    }
     context.beginPath();
-    context.rect(0, 0, canvas.width, canvas.height);
     context.moveTo(path[0].x, path[0].y);
     for (const point of path.slice(1)) context.lineTo(point.x, point.y);
-    if (path.length > 2) context.closePath();
-    context.fillStyle = "rgba(16,30,40,.45)";
-    context.fill("evenodd");
-    context.restore();
-    context.beginPath();
-    context.moveTo(path[0].x, path[0].y);
-    for (const point of path.slice(1)) context.lineTo(point.x, point.y);
-    if (path.length > 2) context.closePath();
+    if (completed && path.length > 2) context.closePath();
     context.strokeStyle = "#df3e32"; context.lineWidth = Math.max(4, canvas.width / 220); context.setLineDash([14, 8]);
     context.stroke(); context.setLineDash([]);
   };
@@ -204,7 +206,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
     draftPathRef.current = [point];
     lockPage();
     event.currentTarget.setPointerCapture(event.pointerId);
-    draw(draftPathRef.current);
+    draw(draftPathRef.current, false);
   };
   const moveSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!draftPathRef.current.length || pointerIdRef.current !== event.pointerId) return;
@@ -213,7 +215,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
     const previous = draftPathRef.current[draftPathRef.current.length - 1];
     if (Math.hypot(point.x - previous.x, point.y - previous.y) < Math.max(2, canvasRef.current!.width / 500)) return;
     draftPathRef.current.push(point);
-    draw(draftPathRef.current);
+    draw(draftPathRef.current, false);
   };
   const finishSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!draftPathRef.current.length || pointerIdRef.current !== event.pointerId) return;
@@ -365,7 +367,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
       </div>
     </div>
     {fileName && <div className="crop">
-      <SectionTitle number="2" title="写真の向きを整えて、記事を一筆で囲む" note={'「指で記事を囲む」を押し、記事の外周を人差し指で一筆書きしてください。\n指を離しても赤線は残ります。斜めなら先に「自動でまっすぐ」を押します。'}/>
+      <SectionTitle number="2" title="写真の向きを整えて、記事を囲む" note={'「記事を囲む」を押し、読みたい記事のまわりを人差し指でなぞってください。\n指を離しても赤線は残ります。斜めなら先に「自動でまっすぐ」を押します。'}/>
       <div className="image-adjustments">
         <button type="button" disabled={adjusting} onClick={() => rotateImage(-90, "左へ回転しました。記事を囲んでください。")}><RotateCcw size={17}/>左回転</button>
         <button type="button" className="straighten" disabled={adjusting} onClick={straighten}><Sparkles size={17}/>{adjusting ? "補正中…" : "自動でまっすぐ"}</button>
@@ -373,9 +375,9 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
         <button type="button" disabled={adjusting} onClick={restoreOriginal}>元に戻す</button>
       </div>
       <div className="stage-picker"><span>この記事は何段ですか？</span><div>{[1,2,3,4].map((count) => <button type="button" key={count} className={stageCount === count ? "active" : ""} onClick={() => setStageCount(count)}><b>{count}</b>段{count === 1 && <span>（横書きの記事）</span>}</button>)}</div><small>縦書きは、紙面が上下に分かれている数を選びます。</small></div>
-      <button type="button" className={tracing ? "trace-guide active" : "trace-guide"} disabled={reading || selectionPath.length > 0} onClick={() => { setTracing(true); setMessage("記事の外周に沿って、一筆で囲んでください。"); }}><ScanLine size={20}/><b>{tracing ? "囲み中です" : selectionPath.length ? "囲みを保持しています" : "指で記事を囲む"}</b><span>{tracing ? "画像の上を人差し指でなぞります。" : selectionPath.length ? "よければ読み取り、違えば囲み直してください。" : "押してから、記事の外周を一筆でなぞります。"}</span></button>
+      <button type="button" className={tracing ? "trace-guide active" : "trace-guide"} disabled={reading || selectionPath.length > 0} onClick={() => { setTracing(true); setMessage("読みたい記事のまわりを人差し指でなぞってください。"); }}><ScanLine size={20}/><b>{tracing ? "なぞっています" : selectionPath.length ? "囲みを保持しています" : "記事を囲む"}</b><span>{tracing ? "指の動きに沿って、一本の赤線を描きます。" : selectionPath.length ? "よければ読み取り、違えば囲み直してください。" : "押してから、記事のまわりを人差し指でなぞります。"}</span></button>
       <div className={tracing ? "canvas-wrap tracing" : "canvas-wrap"}><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection} onPointerCancel={cancelSelection}/></div>
-      <div className="scan-actions"><button className="reset" onClick={() => { draftPathRef.current = []; setSelectionPath([]); setTracing(false); draw([]); setMessage("「指で記事を囲む」を押して、もう一度囲んでください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading} onClick={read}><ScanLine size={20}/>{reading ? stageCount + "段を読み取り中…" : "この記事を読み取る"}</button></div>
+      <div className="scan-actions"><button className="reset" onClick={() => { draftPathRef.current = []; setSelectionPath([]); setTracing(false); draw([]); setMessage("「記事を囲む」を押して、もう一度なぞってください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading} onClick={read}><ScanLine size={20}/>{reading ? stageCount + "段を読み取り中…" : "この記事を読み取る"}</button></div>
       {message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}
     </div>}
   </section>;
