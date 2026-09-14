@@ -5,6 +5,7 @@ import { Camera, Check, Copy, ImagePlus, RotateCcw, ScanLine, Sparkles } from "l
 
 type Point = { x: number; y: number };
 type Result = { title: string; body: string; points: string[]; words: [string, string][]; why: string; relation: string; quiz: { question: string; answer: string }[] };
+type ReadingReview = { summary: string; uncertainSegments: string[]; excludedElements: string[]; confidence: "high" | "medium" | "low"; layout: "vertical" | "horizontal" | "mixed" };
 const grades = [
   { id: "小4", label: "小学4年", note: "やさしく短く" }, { id: "小5", label: "小学5年", note: "理由もわかる" },
   { id: "小6", label: "小学6年", note: "原因と結果" }, { id: "中1", label: "中学1年", note: "要点を整理" },
@@ -15,6 +16,7 @@ export default function Home() {
   const [text, setText] = useState(""), [grade, setGrade] = useState("小4");
   const [result, setResult] = useState<Result | null>(null), [converting, setConverting] = useState(false);
   const [error, setError] = useState(""), [copied, setCopied] = useState(false);
+  const [readingReview, setReadingReview] = useState<ReadingReview | null>(null);
   const selectedGrade = grades.find((item) => item.id === grade)!;
   const convert = async () => {
     if (!text.trim() || converting) return;
@@ -28,11 +30,11 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">新聞読解AI <b>Ver.3.9</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">記事理解AI <b>Ver.4.0</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
-    <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
+    <Scanner onRead={(value, review) => { setText(value); setReadingReview(review || null); setResult(null); }}/>
     <section className="workspace">
-      <div className="panel"><SectionTitle number="3" title="読み取った文章" note=""/><p className="digital-paste-note">デジタル記事のテキストは、ここにコピー＆ペーストしてください。</p><p className="edit-note">直したいところがある場合は、ここで直せます。</p><textarea value={text} onChange={(event) => { setText(event.target.value); setResult(null); }} placeholder="読み取った新聞記事、またはコピーしたデジタル記事をここに入れます。" maxLength={5000}/><div className="counter">{text.length.toLocaleString()} / 5,000字</div></div>
+      <div className="panel"><SectionTitle number="3" title="読み取った文章" note=""/><p className="digital-paste-note">デジタル記事のテキストは、ここにコピー＆ペーストしてください。</p><p className="edit-note">直したいところがある場合は、ここで直せます。</p>{readingReview && <div className={`reading-review ${readingReview.confidence}`}><b>記事理解AIの確認</b><p>{readingReview.summary}</p>{readingReview.uncertainSegments.length > 0 ? <div><strong>画像で確認しにくい箇所</strong><ul>{readingReview.uncertainSegments.map((item, index) => <li key={index}>{item}</li>)}</ul></div> : <small>特に確認が必要な文字は見つかりませんでした。</small>}</div>}<textarea value={text} onChange={(event) => { setText(event.target.value); setReadingReview(null); setResult(null); }} placeholder="読み取った新聞記事、またはコピーしたデジタル記事をここに入れます。" maxLength={5000}/><div className="counter">{text.length.toLocaleString()} / 5,000字</div></div>
       <div className="panel"><SectionTitle number="4" title="読む人の学年を選ぶ" note="学年に合う言葉と文の長さに整えます。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "向けにする"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像と文章は保存しません。処理のためOpenAI APIへ送信します。</p></div>
     </section>
     {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><p className="article">{result.body}</p><div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem key={index} number={index + 1} question={item.question} answer={item.answer}/>)}</section></div></section>}
@@ -132,7 +134,7 @@ function stabilizePath(points: Point[], width: number, height: number) {
   return stabilized;
 }
 
-function Scanner({ onRead }: { onRead: (text: string) => void }) {
+function Scanner({ onRead }: { onRead: (text: string, review?: ReadingReview) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null), imageRef = useRef<HTMLImageElement | null>(null), originalImageRef = useRef<HTMLImageElement | null>(null);
   const draftPathRef = useRef<Point[]>([]), pointerIdRef = useRef<number | null>(null), gestureRectRef = useRef<DOMRect | null>(null);
   const [fileName, setFileName] = useState(""), [selectionPath, setSelectionPath] = useState<Point[]>([]);
@@ -294,7 +296,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
       const right = Math.min(canvas.width, Math.max(...xs)), bottom = Math.min(canvas.height, Math.max(...ys));
       const sourceX = left * image.naturalWidth / canvas.width, sourceY = top * image.naturalHeight / canvas.height;
       const sourceW = (right - left) * image.naturalWidth / canvas.width, sourceH = (bottom - top) * image.naturalHeight / canvas.height;
-      const analysis = document.createElement("canvas"), analysisScale = Math.min(1, 1800 / Math.max(sourceW, sourceH));
+      const analysis = document.createElement("canvas"), analysisScale = Math.min(1, 2600 / Math.max(sourceW, sourceH));
       analysis.width = Math.max(1, Math.round(sourceW * analysisScale)); analysis.height = Math.max(1, Math.round(sourceH * analysisScale));
       const context = analysis.getContext("2d", { willReadFrequently: true }); if (!context) throw new Error("画像を処理できませんでした。");
       context.fillStyle = "#fff"; context.fillRect(0, 0, analysis.width, analysis.height);
@@ -305,6 +307,12 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
       });
       context.closePath(); context.clip();
       context.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, analysis.width, analysis.height); context.restore();
+      let finalQuality = .94, finalImageDataUrl = analysis.toDataURL("image/jpeg", finalQuality);
+      while (finalImageDataUrl.length > 3_250_000 && finalQuality > .62) {
+        finalQuality -= .05;
+        finalImageDataUrl = analysis.toDataURL("image/jpeg", finalQuality);
+      }
+      if (finalImageDataUrl.length > 3_500_000) throw new Error("記事画像を送信できる大きさに調整できませんでした。囲みを少し小さくしてください。");
       const tileCount = stageCount;
       const pixels = context.getImageData(0, 0, analysis.width, analysis.height).data;
       const rowInk = (row: number) => {
@@ -335,7 +343,8 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
       }
       boundaries.push(analysis.height);
       const readParts: string[] = [];
-      let correctionTotal = 0, dualPassTotal = 0, organizedTotal = 0;
+      const allOCRRegions: unknown[] = [];
+      let dualPassTotal = 0;
       for (let index = 0; index < tileCount; index++) {
         setMessage(`${index + 1}/${tileCount}段目を二重に読み取っています…`);
         const overlap = Math.min(24, Math.round(analysis.height / tileCount * .025));
@@ -375,13 +384,12 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
         }
         if (imageDataUrls.reduce((sum, value) => sum + value.length, 0) > 3_700_000) imageDataUrls = [enhanced.toDataURL("image/jpeg", .9)];
         const previousText = readParts.join("\n").slice(-900);
-        const response = await fetch("/api/ocr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrls, dualPass: imageDataUrls.length === 2, layoutHint: stageCount > 1 ? "vertical" : "auto", previousText, partIndex: index, partCount: tileCount }) });
+        const response = await fetch("/api/ocr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrls, dualPass: imageDataUrls.length === 2, layoutHint: stageCount > 1 ? "vertical" : "auto", previousText, partIndex: index, partCount: tileCount, googleOnly: true }) });
         const data = await response.json(); if (!response.ok) throw new Error(data.error || `${index + 1}段目の読み取りに失敗しました。`);
         if (!data.text?.trim()) throw new Error(`${index + 1}段目の文字を読み取れませんでした。`);
         readParts.push(data.text.trim());
-        correctionTotal += data.correctedCount || 0;
         dualPassTotal += data.dualPassUsed ? 1 : 0;
-        organizedTotal += data.organizedByAI ? 1 : 0;
+        if (Array.isArray(data.ocrRegions)) allOCRRegions.push(...data.ocrRegions);
       }
       const mergedText = readParts.reduce((merged, part) => {
         if (!merged) return part;
@@ -392,13 +400,36 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
         }
         return [...currentLines, ...nextLines.slice(overlap)].join("\n");
       }, "");
-      onRead(mergedText);
-      const correctionMessage = correctionTotal ? ` 明確な誤読を${correctionTotal}か所補正しました。` : "";
+      setMessage("記事理解AIが、見出し・本文・段のつながりを確認しています…");
+      let finalText = mergedText;
+      let review: ReadingReview | undefined;
+      let understandingUsed = false;
+      try {
+        const finalResponse = await fetch("/api/ocr/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageDataUrl: finalImageDataUrl, ocrRegions: allOCRRegions, ocrParts: readParts, stageCount }),
+        });
+        const finalData = await finalResponse.json();
+        if (!finalResponse.ok) throw new Error(finalData.error || "記事全体を理解できませんでした。");
+        finalText = finalData.text.trim();
+        review = {
+          summary: finalData.summary || "記事全体の構成を確認しました。",
+          uncertainSegments: Array.isArray(finalData.uncertainSegments) ? finalData.uncertainSegments : [],
+          excludedElements: Array.isArray(finalData.excludedElements) ? finalData.excludedElements : [],
+          confidence: finalData.confidence || "medium",
+          layout: finalData.layout || "mixed",
+        };
+        understandingUsed = true;
+      } catch (finalError) {
+        console.warn("Whole article understanding fallback", finalError);
+      }
+      onRead(finalText, review);
       const dualMessage = dualPassTotal === tileCount ? "各段を通常画像と補正画像で二重に照合しました。" : "高画質画像を優先して読み取りました。";
-      const orderMessage = organizedTotal === tileCount ? " OpenAIが元画像を見て、見出し・本文・段組み・前段からの続きを確認しました。"
-        : organizedTotal ? " 一部はOpenAI画像読解を利用できず、Google OCRの結果を使用しました。"
-        : " OpenAI画像読解を利用できず、Google OCRの結果を使用しました。";
-      setMessage("記事を読み取りました。" + dualMessage + orderMessage + correctionMessage + " 下の学年ボタンから進めます。");
+      const understandingMessage = understandingUsed
+        ? " 記事理解AIが全体画像を見て、見出し・本文・段のつながり・別記事の混入を確認しました。"
+        : " 記事理解AIを利用できなかったため、Google OCRの下書きを表示しました。文章を確認してください。";
+      setMessage("記事を読み取りました。" + dualMessage + understandingMessage + " 下の学年ボタンから進めます。");
     } catch (cause) { setMessage("エラー：" + (cause instanceof Error ? cause.message : "読み取りに失敗しました。")); }
     finally { setReading(false); }
   };
