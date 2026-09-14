@@ -32,6 +32,11 @@
   ],
   "exclude": [
     "node_modules",
+    "components",
+    "hooks",
+    "scripts",
+    "tests",
+    "drizzle",
     "build",
     "db",
     "examples",
