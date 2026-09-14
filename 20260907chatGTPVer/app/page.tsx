@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, Check, Copy, ImagePlus, RotateCcw, ScanLine, Sparkles } from "lucide-react";
 
-type Box = { x: number; y: number; w: number; h: number };
+type Point = { x: number; y: number };
 type Result = { title: string; body: string; points: string[]; words: [string, string][]; why: string; relation: string; quiz: { question: string; answer: string }[] };
 const grades = [
   { id: "小4", label: "小学4年", note: "やさしく短く" }, { id: "小5", label: "小学5年", note: "理由もわかる" },
@@ -28,7 +28,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">新聞読解AI <b>Ver.3.8</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">新聞読解AI <b>Ver.3.9</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onRead={(value) => { setText(value); setResult(null); }}/>
     <section className="workspace">
@@ -89,29 +89,40 @@ function estimateStraighteningAngle(image: HTMLImageElement) {
 }
 
 function Scanner({ onRead }: { onRead: (text: string) => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null), imageRef = useRef<HTMLImageElement | null>(null), originalImageRef = useRef<HTMLImageElement | null>(null), startRef = useRef<{ x: number; y: number } | null>(null);
-  const draftBoxRef = useRef<Box | null>(null), pointerIdRef = useRef<number | null>(null), gestureRectRef = useRef<DOMRect | null>(null);
-  const [fileName, setFileName] = useState(""), [box, setBox] = useState<Box | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null), imageRef = useRef<HTMLImageElement | null>(null), originalImageRef = useRef<HTMLImageElement | null>(null);
+  const draftPathRef = useRef<Point[]>([]), pointerIdRef = useRef<number | null>(null), gestureRectRef = useRef<DOMRect | null>(null);
+  const [fileName, setFileName] = useState(""), [selectionPath, setSelectionPath] = useState<Point[]>([]);
   const [reading, setReading] = useState(false), [adjusting, setAdjusting] = useState(false), [message, setMessage] = useState("");
-  const [stageCount, setStageCount] = useState(1);
+  const [stageCount, setStageCount] = useState(1), [tracing, setTracing] = useState(false);
   const lockPage = () => document.documentElement.classList.add("crop-locked");
   const unlockPage = () => {
     document.documentElement.classList.remove("crop-locked");
   };
-  const draw = (selection = box) => {
+  const draw = (path = selectionPath) => {
     const canvas = canvasRef.current, image = imageRef.current;
     if (!canvas || !image) return;
     const context = canvas.getContext("2d"); if (!context) return;
     context.clearRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    if (!selection) return;
-    const x = Math.min(selection.x, selection.x + selection.w), y = Math.min(selection.y, selection.y + selection.h), w = Math.abs(selection.w), h = Math.abs(selection.h);
+    if (path.length < 2) return;
+    context.save();
+    context.beginPath();
+    context.rect(0, 0, canvas.width, canvas.height);
+    context.moveTo(path[0].x, path[0].y);
+    for (const point of path.slice(1)) context.lineTo(point.x, point.y);
+    if (path.length > 2) context.closePath();
     context.fillStyle = "rgba(16,30,40,.45)";
-    context.fillRect(0, 0, canvas.width, y); context.fillRect(0, y, x, h); context.fillRect(x + w, y, canvas.width - x - w, h); context.fillRect(0, y + h, canvas.width, canvas.height - y - h);
-    context.strokeStyle = "#df3e32"; context.lineWidth = Math.max(4, canvas.width / 220); context.setLineDash([14, 8]); context.strokeRect(x, y, w, h); context.setLineDash([]);
+    context.fill("evenodd");
+    context.restore();
+    context.beginPath();
+    context.moveTo(path[0].x, path[0].y);
+    for (const point of path.slice(1)) context.lineTo(point.x, point.y);
+    if (path.length > 2) context.closePath();
+    context.strokeStyle = "#df3e32"; context.lineWidth = Math.max(4, canvas.width / 220); context.setLineDash([14, 8]);
+    context.stroke(); context.setLineDash([]);
   };
-  useEffect(() => { draw(); }, [box]);
+  useEffect(() => { draw(); }, [selectionPath]);
   useEffect(() => {
-    const stopTouchScroll = (event: TouchEvent) => { if (startRef.current) event.preventDefault(); };
+    const stopTouchScroll = (event: TouchEvent) => { if (pointerIdRef.current !== null) event.preventDefault(); };
     document.addEventListener("touchmove", stopTouchScroll, { passive: false });
     return () => { document.removeEventListener("touchmove", stopTouchScroll); unlockPage(); };
   }, []);
@@ -122,9 +133,10 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
     const scale = Math.min(1, 1100 / image.naturalWidth);
     canvas.width = Math.round(image.naturalWidth * scale);
     canvas.height = Math.round(image.naturalHeight * scale);
-    setBox(null);
+    setSelectionPath([]);
+    setTracing(false);
     setMessage(nextMessage);
-    requestAnimationFrame(() => draw(null));
+    requestAnimationFrame(() => draw([]));
   };
   const rotateImage = (degrees: number, nextMessage: string) => {
     const image = imageRef.current;
@@ -163,7 +175,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
   const load = (file?: File) => {
     if (!file) return;
     setFileName(file.name);
-    setBox(null);
+    setSelectionPath([]);
     setStageCount(1);
     setMessage("画像を読み込んでいます…");
     const image = new Image();
@@ -182,58 +194,71 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
     return { x: Math.max(0, Math.min(canvas.width, (event.clientX - rect.left) * canvas.width / rect.width)), y: Math.max(0, Math.min(canvas.height, (event.clientY - rect.top) * canvas.height / rect.height)) };
   };
   const beginSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!tracing || selectionPath.length) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
     gestureRectRef.current = rect;
     pointerIdRef.current = event.pointerId;
     const point = position(event, rect);
-    startRef.current = point;
-    draftBoxRef.current = { x: point.x, y: point.y, w: 0, h: 0 };
+    draftPathRef.current = [point];
     lockPage();
     event.currentTarget.setPointerCapture(event.pointerId);
-    draw(draftBoxRef.current);
+    draw(draftPathRef.current);
   };
   const moveSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!startRef.current || pointerIdRef.current !== event.pointerId) return;
+    if (!draftPathRef.current.length || pointerIdRef.current !== event.pointerId) return;
     event.preventDefault();
     const point = position(event);
-    draftBoxRef.current = { x: startRef.current.x, y: startRef.current.y, w: point.x - startRef.current.x, h: point.y - startRef.current.y };
-    draw(draftBoxRef.current);
+    const previous = draftPathRef.current[draftPathRef.current.length - 1];
+    if (Math.hypot(point.x - previous.x, point.y - previous.y) < Math.max(2, canvasRef.current!.width / 500)) return;
+    draftPathRef.current.push(point);
+    draw(draftPathRef.current);
   };
   const finishSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!startRef.current || pointerIdRef.current !== event.pointerId) return;
+    if (!draftPathRef.current.length || pointerIdRef.current !== event.pointerId) return;
     event.preventDefault();
     const point = position(event);
-    const finalBox = { x: startRef.current.x, y: startRef.current.y, w: point.x - startRef.current.x, h: point.y - startRef.current.y };
-    draftBoxRef.current = finalBox;
-    draw(finalBox);
-    setBox(finalBox);
-    startRef.current = null;
+    const finalPath = [...draftPathRef.current, point];
+    setSelectionPath(finalPath);
+    draw(finalPath);
+    draftPathRef.current = [];
     pointerIdRef.current = null;
     gestureRectRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     unlockPage();
+    setTracing(false);
+    setMessage("囲みを保持しました。よければ「この記事を読み取る」を押してください。");
   };
   const cancelSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (pointerIdRef.current !== event.pointerId) return;
-    if (draftBoxRef.current) { draw(draftBoxRef.current); setBox(draftBoxRef.current); }
-    startRef.current = null;
+    if (draftPathRef.current.length > 2) setSelectionPath([...draftPathRef.current]);
+    draftPathRef.current = [];
     pointerIdRef.current = null;
     gestureRectRef.current = null;
     unlockPage();
+    setTracing(false);
   };
   const read = async () => {
-    const image = imageRef.current, canvas = canvasRef.current; if (!image || !canvas || !box || reading) return;
+    const image = imageRef.current, canvas = canvasRef.current; if (!image || !canvas || selectionPath.length < 3 || reading) return;
     setReading(true); setMessage("高画質で記事を準備しています…");
     try {
-      const left = Math.max(0, Math.min(box.x, box.x + box.w)), top = Math.max(0, Math.min(box.y, box.y + box.h));
+      const xs = selectionPath.map((point) => point.x), ys = selectionPath.map((point) => point.y);
+      const left = Math.max(0, Math.min(...xs)), top = Math.max(0, Math.min(...ys));
+      const right = Math.min(canvas.width, Math.max(...xs)), bottom = Math.min(canvas.height, Math.max(...ys));
       const sourceX = left * image.naturalWidth / canvas.width, sourceY = top * image.naturalHeight / canvas.height;
-      const sourceW = Math.abs(box.w) * image.naturalWidth / canvas.width, sourceH = Math.abs(box.h) * image.naturalHeight / canvas.height;
+      const sourceW = (right - left) * image.naturalWidth / canvas.width, sourceH = (bottom - top) * image.naturalHeight / canvas.height;
       const analysis = document.createElement("canvas"), analysisScale = Math.min(1, 1800 / Math.max(sourceW, sourceH));
       analysis.width = Math.max(1, Math.round(sourceW * analysisScale)); analysis.height = Math.max(1, Math.round(sourceH * analysisScale));
       const context = analysis.getContext("2d", { willReadFrequently: true }); if (!context) throw new Error("画像を処理できませんでした。");
-      context.fillStyle = "#fff"; context.fillRect(0, 0, analysis.width, analysis.height); context.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, analysis.width, analysis.height);
+      context.fillStyle = "#fff"; context.fillRect(0, 0, analysis.width, analysis.height);
+      context.save(); context.beginPath();
+      selectionPath.forEach((point, index) => {
+        const x = (point.x - left) / (right - left) * analysis.width, y = (point.y - top) / (bottom - top) * analysis.height;
+        if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+      });
+      context.closePath(); context.clip();
+      context.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, analysis.width, analysis.height); context.restore();
       const tileCount = stageCount;
       const pixels = context.getImageData(0, 0, analysis.width, analysis.height).data;
       const rowInk = (row: number) => {
@@ -278,7 +303,16 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
         const tileContext = tile.getContext("2d", { willReadFrequently: true }); if (!tileContext) throw new Error("画像を分割できませんでした。");
         tileContext.fillStyle = "#fff"; tileContext.fillRect(0, 0, tile.width, tile.height);
         tileContext.imageSmoothingEnabled = true; tileContext.imageSmoothingQuality = "high";
-        tileContext.drawImage(image, sourceX, tileSourceY, sourceW, tileSourceH, 0, 0, tile.width, tile.height);
+        tileContext.save(); tileContext.beginPath();
+        selectionPath.forEach((point, pointIndex) => {
+          const imageX = point.x * image.naturalWidth / canvas.width;
+          const imageY = point.y * image.naturalHeight / canvas.height;
+          const x = (imageX - sourceX) / sourceW * tile.width;
+          const y = (imageY - tileSourceY) / tileSourceH * tile.height;
+          if (pointIndex === 0) tileContext.moveTo(x, y); else tileContext.lineTo(x, y);
+        });
+        tileContext.closePath(); tileContext.clip();
+        tileContext.drawImage(image, sourceX, tileSourceY, sourceW, tileSourceH, 0, 0, tile.width, tile.height); tileContext.restore();
         const enhanced = document.createElement("canvas"); enhanced.width = tile.width; enhanced.height = tile.height;
         const enhancedContext = enhanced.getContext("2d"); if (!enhancedContext) throw new Error("画像を補正できませんでした。");
         const imageData = tileContext.getImageData(0, 0, tile.width, tile.height), enhancedPixels = imageData.data;
@@ -331,7 +365,7 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
       </div>
     </div>
     {fileName && <div className="crop">
-      <SectionTitle number="2" title="写真の向きを整えて、記事を囲んで指定する" note={'指かマウスで記事を囲み、赤線の内側に入れてください。\n斜めなら「自動でまっすぐ」を押してから、読みたい記事を囲みます。'}/>
+      <SectionTitle number="2" title="写真の向きを整えて、記事を一筆で囲む" note={'「指で記事を囲む」を押し、記事の外周を人差し指で一筆書きしてください。\n指を離しても赤線は残ります。斜めなら先に「自動でまっすぐ」を押します。'}/>
       <div className="image-adjustments">
         <button type="button" disabled={adjusting} onClick={() => rotateImage(-90, "左へ回転しました。記事を囲んでください。")}><RotateCcw size={17}/>左回転</button>
         <button type="button" className="straighten" disabled={adjusting} onClick={straighten}><Sparkles size={17}/>{adjusting ? "補正中…" : "自動でまっすぐ"}</button>
@@ -339,8 +373,9 @@ function Scanner({ onRead }: { onRead: (text: string) => void }) {
         <button type="button" disabled={adjusting} onClick={restoreOriginal}>元に戻す</button>
       </div>
       <div className="stage-picker"><span>この記事は何段ですか？</span><div>{[1,2,3,4].map((count) => <button type="button" key={count} className={stageCount === count ? "active" : ""} onClick={() => setStageCount(count)}><b>{count}</b>段{count === 1 && <span>（横書きの記事）</span>}</button>)}</div><small>縦書きは、紙面が上下に分かれている数を選びます。</small></div>
-      <div className="canvas-wrap"><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection} onPointerCancel={cancelSelection}/></div>
-      <div className="scan-actions"><button className="reset" onClick={() => { setBox(null); setMessage("もう一度、記事を囲んでください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={!box || Math.abs(box.w) < 30 || Math.abs(box.h) < 30 || reading} onClick={read}><ScanLine size={20}/>{reading ? stageCount + "段を読み取り中…" : stageCount + "段の記事を読み取る"}</button></div>
+      <button type="button" className={tracing ? "trace-guide active" : "trace-guide"} disabled={reading || selectionPath.length > 0} onClick={() => { setTracing(true); setMessage("記事の外周に沿って、一筆で囲んでください。"); }}><ScanLine size={20}/><b>{tracing ? "囲み中です" : selectionPath.length ? "囲みを保持しています" : "指で記事を囲む"}</b><span>{tracing ? "画像の上を人差し指でなぞります。" : selectionPath.length ? "よければ読み取り、違えば囲み直してください。" : "押してから、記事の外周を一筆でなぞります。"}</span></button>
+      <div className={tracing ? "canvas-wrap tracing" : "canvas-wrap"}><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection} onPointerCancel={cancelSelection}/></div>
+      <div className="scan-actions"><button className="reset" onClick={() => { draftPathRef.current = []; setSelectionPath([]); setTracing(false); draw([]); setMessage("「指で記事を囲む」を押して、もう一度囲んでください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading} onClick={read}><ScanLine size={20}/>{reading ? stageCount + "段を読み取り中…" : "この記事を読み取る"}</button></div>
       {message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}
     </div>}
   </section>;
