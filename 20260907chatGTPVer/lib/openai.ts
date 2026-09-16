@@ -1,6 +1,6 @@
 const endpoint = "https://api.openai.com/v1/responses";
 
-export async function askOpenAI(input: unknown, schema: Record<string, unknown>) {
+export async function askOpenAI(input: unknown, schema: Record<string, unknown>, timeoutMs?: number) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new OpenAIError("VercelにOPENAI_API_KEYを登録するとAI読み取りを使えます。", 503);
@@ -8,6 +8,7 @@ export async function askOpenAI(input: unknown, schema: Record<string, unknown>)
 
   const response = await fetch(endpoint, {
     method: "POST",
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",

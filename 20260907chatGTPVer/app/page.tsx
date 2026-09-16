@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ArticleEditor, { type ArticleImage } from "./article-editor";
 import { Camera, Check, Copy, ImagePlus, RotateCcw, ScanLine, Sparkles } from "lucide-react";
 
 type Point = { x: number; y: number };
@@ -14,7 +15,7 @@ const grades = [
 
 export default function Home() {
   const [text, setText] = useState(""), [grade, setGrade] = useState("小4");
-  const [rawOCR, setRawOCR] = useState("");
+  const [articleImage, setArticleImage] = useState<ArticleImage | null>(null);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<Result | null>(null), [converting, setConverting] = useState(false);
   const [error, setError] = useState(""), [copied, setCopied] = useState(false);
@@ -32,11 +33,11 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.1</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.2</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
-    <Scanner onBusy={setScanning} onRead={(value, review, raw) => { setText(value); setRawOCR(raw || ""); setReadingReview(review || null); setResult(null); }}/>
+    <Scanner onBusy={setScanning} onRead={(value, review, source) => { setText(value); setArticleImage(source || null); setReadingReview(review || null); setResult(null); }}/>
     <section className="workspace">
-      <div className="panel"><SectionTitle number="3" title="読み取った文章" note=""/><p className="digital-paste-note">デジタル記事のテキストは、ここにコピー＆ペーストしてください。</p><p className="edit-note">直したいところがある場合は、ここで直せます。</p>{readingReview && <div className={`reading-review ${readingReview.confidence}`}><b>記事理解AIの確認</b><p>{readingReview.summary}</p>{readingReview.uncertainSegments.length > 0 ? <div><strong>画像で確認しにくい箇所</strong><ul>{readingReview.uncertainSegments.map((item, index) => <li key={index}>{item}</li>)}</ul></div> : <small>AIが指摘した箇所はありません。数字や名前は原文と見比べてください。</small>}{readingReview.excludedElements.length > 0 && <details><summary>本文から外した箇所を確認</summary><ul>{readingReview.excludedElements.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}</div>}{rawOCR && <details><summary>整理前の読み取り結果を見る</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{rawOCR}</pre><button type="button" disabled={scanning} onClick={() => { setText(rawOCR); setReadingReview(null); setResult(null); }}>この文章に戻す</button></details>}<textarea disabled={scanning} value={text} onChange={(event) => { setText(event.target.value); setReadingReview(null); setResult(null); }} placeholder="読み取った新聞記事、またはコピーしたデジタル記事をここに入れます。" maxLength={5000}/><div className="counter">{text.length.toLocaleString()} / 5,000字</div></div>
+      <div className="panel"><SectionTitle number="3" title="読み取った文章" note=""/><p className="digital-paste-note">デジタル記事のテキストは、ここにコピー＆ペーストしてください。</p><p className="edit-note">直したいところがある場合は、ここで直せます。</p>{readingReview && <div className={`reading-review ${readingReview.confidence}`}><b>記事理解AIの確認</b><p>{readingReview.summary}</p>{readingReview.uncertainSegments.length > 0 ? <div><strong>画像で確認しにくい箇所</strong><ul>{readingReview.uncertainSegments.map((item, index) => <li key={index}>{item}</li>)}</ul></div> : <small>AIが指摘した箇所はありません。数字や名前は原文と見比べてください。</small>}{readingReview.excludedElements.length > 0 && <details><summary>本文から外した箇所を確認</summary><ul>{readingReview.excludedElements.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}</div>}<ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setReadingReview(null); setResult(null); }}/></div>
       <div className="panel"><SectionTitle number="4" title="読む人の学年を選ぶ" note="学年に合う言葉と文の長さに整えます。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting || scanning} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "向けにする"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像は読み取りのためGoogle Cloudへ、画像と文章は内容の確認・学年別変換のためOpenAI APIへ送信します。</p></div>
     </section>
     {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><p className="article">{result.body}</p><div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem key={index} number={index + 1} question={item.question} answer={item.answer}/>)}</section></div></section>}
@@ -136,7 +137,7 @@ function stabilizePath(points: Point[], width: number, height: number) {
   return stabilized;
 }
 
-function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: (text: string, review?: ReadingReview, raw?: string) => void }) {
+function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: (text: string, review?: ReadingReview, source?: ArticleImage) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null), imageRef = useRef<HTMLImageElement | null>(null), originalImageRef = useRef<HTMLImageElement | null>(null);
   const draftPathRef = useRef<Point[]>([]), pointerIdRef = useRef<number | null>(null), gestureRectRef = useRef<DOMRect | null>(null);
   const [fileName, setFileName] = useState(""), [selectionPath, setSelectionPath] = useState<Point[]>([]);
@@ -331,7 +332,8 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
       if (!response.ok || typeof data?.text !== "string" || !data.text.trim()) throw new Error(data?.error || "読み取りに失敗しました。");
       const rawText = data.text;
       // Make the OCR output available even if article understanding later fails.
-      onRead(rawText, undefined, rawText);
+      const source: ArticleImage = { imageDataUrl, width: output.width, height: output.height, regions: Array.isArray(data.ocrRegions) ? data.ocrRegions : [] };
+      onRead(rawText, undefined, source);
       setMessage("読み取れました。記事の順番と内容を確認しています…");
       let finalText = rawText;
       let review: ReadingReview | undefined;
@@ -358,7 +360,7 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
       } catch {
         // Keep the complete raw transcript; no AI-generated substitute.
       }
-      onRead(finalText, review, rawText);
+      onRead(finalText, review, source);
       setMessage(review ? "記事を読み取りました。原文と見比べてから、学年を選んでください。"
         : "文字は読み取れました。記事の内容確認は完了していません。原文と見比べてから、学年を選んでください。");
     } catch (cause) {
