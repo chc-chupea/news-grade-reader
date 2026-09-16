@@ -14,12 +14,14 @@ const grades = [
 
 export default function Home() {
   const [text, setText] = useState(""), [grade, setGrade] = useState("小4");
+  const [rawOCR, setRawOCR] = useState("");
+  const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<Result | null>(null), [converting, setConverting] = useState(false);
   const [error, setError] = useState(""), [copied, setCopied] = useState(false);
   const [readingReview, setReadingReview] = useState<ReadingReview | null>(null);
   const selectedGrade = grades.find((item) => item.id === grade)!;
   const convert = async () => {
-    if (!text.trim() || converting) return;
+    if (!text.trim() || converting || scanning) return;
     setConverting(true); setResult(null); setError("");
     try {
       const response = await fetch("/api/convert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.trim(), grade }) });
@@ -30,12 +32,12 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version">記事理解AI <b>Ver.4.0</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.1</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
-    <Scanner onRead={(value, review) => { setText(value); setReadingReview(review || null); setResult(null); }}/>
+    <Scanner onBusy={setScanning} onRead={(value, review, raw) => { setText(value); setRawOCR(raw || ""); setReadingReview(review || null); setResult(null); }}/>
     <section className="workspace">
-      <div className="panel"><SectionTitle number="3" title="読み取った文章" note=""/><p className="digital-paste-note">デジタル記事のテキストは、ここにコピー＆ペーストしてください。</p><p className="edit-note">直したいところがある場合は、ここで直せます。</p>{readingReview && <div className={`reading-review ${readingReview.confidence}`}><b>記事理解AIの確認</b><p>{readingReview.summary}</p>{readingReview.uncertainSegments.length > 0 ? <div><strong>画像で確認しにくい箇所</strong><ul>{readingReview.uncertainSegments.map((item, index) => <li key={index}>{item}</li>)}</ul></div> : <small>特に確認が必要な文字は見つかりませんでした。</small>}</div>}<textarea value={text} onChange={(event) => { setText(event.target.value); setReadingReview(null); setResult(null); }} placeholder="読み取った新聞記事、またはコピーしたデジタル記事をここに入れます。" maxLength={5000}/><div className="counter">{text.length.toLocaleString()} / 5,000字</div></div>
-      <div className="panel"><SectionTitle number="4" title="読む人の学年を選ぶ" note="学年に合う言葉と文の長さに整えます。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "向けにする"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像と文章は保存しません。処理のためOpenAI APIへ送信します。</p></div>
+      <div className="panel"><SectionTitle number="3" title="読み取った文章" note=""/><p className="digital-paste-note">デジタル記事のテキストは、ここにコピー＆ペーストしてください。</p><p className="edit-note">直したいところがある場合は、ここで直せます。</p>{readingReview && <div className={`reading-review ${readingReview.confidence}`}><b>記事理解AIの確認</b><p>{readingReview.summary}</p>{readingReview.uncertainSegments.length > 0 ? <div><strong>画像で確認しにくい箇所</strong><ul>{readingReview.uncertainSegments.map((item, index) => <li key={index}>{item}</li>)}</ul></div> : <small>AIが指摘した箇所はありません。数字や名前は原文と見比べてください。</small>}{readingReview.excludedElements.length > 0 && <details><summary>本文から外した箇所を確認</summary><ul>{readingReview.excludedElements.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}</div>}{rawOCR && <details><summary>整理前の読み取り結果を見る</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{rawOCR}</pre><button type="button" disabled={scanning} onClick={() => { setText(rawOCR); setReadingReview(null); setResult(null); }}>この文章に戻す</button></details>}<textarea disabled={scanning} value={text} onChange={(event) => { setText(event.target.value); setReadingReview(null); setResult(null); }} placeholder="読み取った新聞記事、またはコピーしたデジタル記事をここに入れます。" maxLength={5000}/><div className="counter">{text.length.toLocaleString()} / 5,000字</div></div>
+      <div className="panel"><SectionTitle number="4" title="読む人の学年を選ぶ" note="学年に合う言葉と文の長さに整えます。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting || scanning} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "向けにする"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像は読み取りのためGoogle Cloudへ、画像と文章は内容の確認・学年別変換のためOpenAI APIへ送信します。</p></div>
     </section>
     {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><p className="article">{result.body}</p><div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem key={index} number={index + 1} question={item.question} answer={item.answer}/>)}</section></div></section>}
     <footer>新聞記事 AI学年別理解サポート（試作版）</footer>
@@ -134,7 +136,7 @@ function stabilizePath(points: Point[], width: number, height: number) {
   return stabilized;
 }
 
-function Scanner({ onRead }: { onRead: (text: string, review?: ReadingReview) => void }) {
+function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: (text: string, review?: ReadingReview, raw?: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null), imageRef = useRef<HTMLImageElement | null>(null), originalImageRef = useRef<HTMLImageElement | null>(null);
   const draftPathRef = useRef<Point[]>([]), pointerIdRef = useRef<number | null>(null), gestureRectRef = useRef<DOMRect | null>(null);
   const [fileName, setFileName] = useState(""), [selectionPath, setSelectionPath] = useState<Point[]>([]);
@@ -192,11 +194,12 @@ function Scanner({ onRead }: { onRead: (text: string, review?: ReadingReview) =>
     setAdjusting(true);
     requestAnimationFrame(() => {
       const radians = degrees * Math.PI / 180;
-      const sourceScale = Math.min(1, 2800 / Math.max(image.naturalWidth, image.naturalHeight));
+      const sourceScale = 1;
       const sourceWidth = image.naturalWidth * sourceScale, sourceHeight = image.naturalHeight * sourceScale;
       const output = document.createElement("canvas");
       output.width = Math.max(1, Math.ceil(Math.abs(sourceWidth * Math.cos(radians)) + Math.abs(sourceHeight * Math.sin(radians))));
       output.height = Math.max(1, Math.ceil(Math.abs(sourceWidth * Math.sin(radians)) + Math.abs(sourceHeight * Math.cos(radians))));
+      if (output.width * output.height > 40_000_000) { setAdjusting(false); setMessage("画像が大きすぎて回転できません。記事に近づいて撮り直してください。"); return; }
       const context = output.getContext("2d");
       if (!context) { setAdjusting(false); setMessage("画像を補正できませんでした。"); return; }
       context.fillStyle = "#fff"; context.fillRect(0, 0, output.width, output.height);
@@ -205,7 +208,7 @@ function Scanner({ onRead }: { onRead: (text: string, review?: ReadingReview) =>
       const adjusted = new Image();
       adjusted.onload = () => { showImage(adjusted, nextMessage); setAdjusting(false); };
       adjusted.onerror = () => { setMessage("画像を補正できませんでした。"); setAdjusting(false); };
-      adjusted.src = output.toDataURL("image/jpeg", .94);
+      adjusted.src = output.toDataURL("image/png");
     });
   };
   const straighten = () => {
@@ -221,7 +224,7 @@ function Scanner({ onRead }: { onRead: (text: string, review?: ReadingReview) =>
     showImage(originalImageRef.current, "最初の画像に戻しました。記事を囲んでください。");
   };
   const load = (file?: File) => {
-    if (!file) return;
+    if (!file || reading) return;
     setFileName(file.name);
     setSelectionPath([]);
     setStageCount(1);
@@ -288,171 +291,102 @@ function Scanner({ onRead }: { onRead: (text: string, review?: ReadingReview) =>
     setTracing(false);
   };
   const read = async () => {
-    const image = imageRef.current, canvas = canvasRef.current; if (!image || !canvas || selectionPath.length < 3 || reading) return;
-    setReading(true); setMessage("高画質で記事を準備しています…");
+    const image = imageRef.current, canvas = canvasRef.current;
+    if (!image || !canvas || selectionPath.length < 3 || reading) return;
+    setReading(true); onBusy(true); setMessage("記事の画像を準備しています…");
     try {
       const xs = selectionPath.map((point) => point.x), ys = selectionPath.map((point) => point.y);
       const left = Math.max(0, Math.min(...xs)), top = Math.max(0, Math.min(...ys));
       const right = Math.min(canvas.width, Math.max(...xs)), bottom = Math.min(canvas.height, Math.max(...ys));
       const sourceX = left * image.naturalWidth / canvas.width, sourceY = top * image.naturalHeight / canvas.height;
       const sourceW = (right - left) * image.naturalWidth / canvas.width, sourceH = (bottom - top) * image.naturalHeight / canvas.height;
-      const analysis = document.createElement("canvas"), analysisScale = Math.min(1, 2600 / Math.max(sourceW, sourceH));
-      analysis.width = Math.max(1, Math.round(sourceW * analysisScale)); analysis.height = Math.max(1, Math.round(sourceH * analysisScale));
-      const context = analysis.getContext("2d", { willReadFrequently: true }); if (!context) throw new Error("画像を処理できませんでした。");
-      context.fillStyle = "#fff"; context.fillRect(0, 0, analysis.width, analysis.height);
+      if (sourceW < 10 || sourceH < 10) throw new Error("記事のまわりを、もう少し広く囲んでください。");
+      if (sourceW * sourceH > 40_000_000) throw new Error("画像が大きすぎます。記事の範囲を少し小さくしてください。");
+      // Submit the complete article at source resolution, without cutting columns
+      // at guessed gutters. NDLOCR handles the layout on the complete masked crop.
+      const output = document.createElement("canvas");
+      output.width = Math.max(1, Math.round(sourceW)); output.height = Math.max(1, Math.round(sourceH));
+      const context = output.getContext("2d");
+      if (!context) throw new Error("画像を準備できませんでした。");
+      context.fillStyle = "#fff"; context.fillRect(0, 0, output.width, output.height);
       context.save(); context.beginPath();
       selectionPath.forEach((point, index) => {
-        const x = (point.x - left) / (right - left) * analysis.width, y = (point.y - top) / (bottom - top) * analysis.height;
-        if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+        const x = (point.x - left) / (right - left) * output.width;
+        const y = (point.y - top) / (bottom - top) * output.height;
+        if (!index) context.moveTo(x, y); else context.lineTo(x, y);
       });
       context.closePath(); context.clip();
-      context.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, analysis.width, analysis.height); context.restore();
-      let finalQuality = .94, finalImageDataUrl = analysis.toDataURL("image/jpeg", finalQuality);
-      while (finalImageDataUrl.length > 3_250_000 && finalQuality > .62) {
-        finalQuality -= .05;
-        finalImageDataUrl = analysis.toDataURL("image/jpeg", finalQuality);
-      }
-      if (finalImageDataUrl.length > 3_500_000) throw new Error("記事画像を送信できる大きさに調整できませんでした。囲みを少し小さくしてください。");
-      const tileCount = stageCount;
-      const pixels = context.getImageData(0, 0, analysis.width, analysis.height).data;
-      const rowInk = (row: number) => {
-        let dark = 0, checked = 0;
-        for (let y = Math.max(0, row - 2); y <= Math.min(analysis.height - 1, row + 2); y++) {
-          for (let x = 0; x < analysis.width; x += 4) {
-            const offset = (y * analysis.width + x) * 4;
-            const brightness = pixels[offset] * .299 + pixels[offset + 1] * .587 + pixels[offset + 2] * .114;
-            if (brightness < 205) dark++;
-            checked++;
-          }
-        }
-        return dark / Math.max(1, checked);
-      };
-      const boundaries = [0];
-      for (let index = 1; index < tileCount; index++) {
-        const ideal = analysis.height * index / tileCount;
-        const radius = Math.max(24, analysis.height / tileCount * .28);
-        const from = Math.max(boundaries[index - 1] + 30, Math.floor(ideal - radius));
-        const to = Math.min(analysis.height - 30, Math.ceil(ideal + radius));
-        let bestRow = Math.round(ideal), bestScore = Number.POSITIVE_INFINITY;
-        for (let row = from; row <= to; row += 2) {
-          const distancePenalty = Math.abs(row - ideal) / radius * .012;
-          const score = rowInk(row) + distancePenalty;
-          if (score < bestScore) { bestScore = score; bestRow = row; }
-        }
-        boundaries.push(bestRow);
-      }
-      boundaries.push(analysis.height);
-      const readParts: string[] = [];
-      const allOCRRegions: unknown[] = [];
-      let dualPassTotal = 0;
-      for (let index = 0; index < tileCount; index++) {
-        setMessage(`${index + 1}/${tileCount}段目を二重に読み取っています…`);
-        const overlap = Math.min(24, Math.round(analysis.height / tileCount * .025));
-        const tileTop = Math.max(0, boundaries[index] - (index ? overlap : 0));
-        const tileBottom = Math.min(analysis.height, boundaries[index + 1] + (index < tileCount - 1 ? overlap : 0));
-        const tileSourceY = sourceY + tileTop / analysis.height * sourceH;
-        const tileSourceH = (tileBottom - tileTop) / analysis.height * sourceH;
-        const outputScale = Math.min(1.65, 3400 / Math.max(sourceW, tileSourceH));
-        const tile = document.createElement("canvas");
-        tile.width = Math.max(1, Math.round(sourceW * outputScale)); tile.height = Math.max(1, Math.round(tileSourceH * outputScale));
-        const tileContext = tile.getContext("2d", { willReadFrequently: true }); if (!tileContext) throw new Error("画像を分割できませんでした。");
-        tileContext.fillStyle = "#fff"; tileContext.fillRect(0, 0, tile.width, tile.height);
-        tileContext.imageSmoothingEnabled = true; tileContext.imageSmoothingQuality = "high";
-        tileContext.save(); tileContext.beginPath();
-        selectionPath.forEach((point, pointIndex) => {
-          const imageX = point.x * image.naturalWidth / canvas.width;
-          const imageY = point.y * image.naturalHeight / canvas.height;
-          const x = (imageX - sourceX) / sourceW * tile.width;
-          const y = (imageY - tileSourceY) / tileSourceH * tile.height;
-          if (pointIndex === 0) tileContext.moveTo(x, y); else tileContext.lineTo(x, y);
-        });
-        tileContext.closePath(); tileContext.clip();
-        tileContext.drawImage(image, sourceX, tileSourceY, sourceW, tileSourceH, 0, 0, tile.width, tile.height); tileContext.restore();
-        const enhanced = document.createElement("canvas"); enhanced.width = tile.width; enhanced.height = tile.height;
-        const enhancedContext = enhanced.getContext("2d"); if (!enhancedContext) throw new Error("画像を補正できませんでした。");
-        const imageData = tileContext.getImageData(0, 0, tile.width, tile.height), enhancedPixels = imageData.data;
-        for (let offset = 0; offset < enhancedPixels.length; offset += 4) {
-          const gray = enhancedPixels[offset] * .299 + enhancedPixels[offset + 1] * .587 + enhancedPixels[offset + 2] * .114;
-          const value = Math.max(0, Math.min(255, (gray - 128) * 1.24 + 128));
-          enhancedPixels[offset] = value; enhancedPixels[offset + 1] = value; enhancedPixels[offset + 2] = value;
-        }
-        enhancedContext.putImageData(imageData, 0, 0);
-        let quality = .94, imageDataUrls = [tile.toDataURL("image/jpeg", quality), enhanced.toDataURL("image/jpeg", quality)];
-        while (imageDataUrls.reduce((sum, value) => sum + value.length, 0) > 3_500_000 && quality > .78) {
-          quality -= .04;
-          imageDataUrls = [tile.toDataURL("image/jpeg", quality), enhanced.toDataURL("image/jpeg", quality)];
-        }
-        if (imageDataUrls.reduce((sum, value) => sum + value.length, 0) > 3_700_000) imageDataUrls = [enhanced.toDataURL("image/jpeg", .9)];
-        const previousText = readParts.join("\n").slice(-900);
-        const response = await fetch("/api/ocr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrls, dualPass: imageDataUrls.length === 2, layoutHint: stageCount > 1 ? "vertical" : "auto", previousText, partIndex: index, partCount: tileCount, googleOnly: true }) });
-        const data = await response.json(); if (!response.ok) throw new Error(data.error || `${index + 1}段目の読み取りに失敗しました。`);
-        if (!data.text?.trim()) throw new Error(`${index + 1}段目の文字を読み取れませんでした。`);
-        readParts.push(data.text.trim());
-        dualPassTotal += data.dualPassUsed ? 1 : 0;
-        if (Array.isArray(data.ocrRegions)) allOCRRegions.push(...data.ocrRegions);
-      }
-      const mergedText = readParts.reduce((merged, part) => {
-        if (!merged) return part;
-        const currentLines = merged.split(/\r?\n/), nextLines = part.split(/\r?\n/);
-        let overlap = 0;
-        for (let size = Math.min(10, currentLines.length, nextLines.length); size >= 1; size--) {
-          if (currentLines.slice(-size).join("") === nextLines.slice(0, size).join("")) { overlap = size; break; }
-        }
-        return [...currentLines, ...nextLines.slice(overlap)].join("\n");
-      }, "");
-      setMessage("記事理解AIが、見出し・本文・段のつながりを確認しています…");
-      let finalText = mergedText;
+      context.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, output.width, output.height);
+      context.restore();
+      // Prefer lossless PNG; JPEG is only a transfer-size fallback, never resize.
+      let imageDataUrl = output.toDataURL("image/png");
+      if (imageDataUrl.length > 3_500_000) imageDataUrl = output.toDataURL("image/jpeg", .96);
+      if (imageDataUrl.length > 3_500_000) throw new Error("画質を保って送るには、記事の範囲をもう少し小さくしてください。");
+      setMessage("記事を読み取っています。初回は少し時間がかかります…");
+      const response = await fetch("/api/ocr", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrls: [imageDataUrl] }), signal: AbortSignal.timeout(230_000),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || typeof data?.text !== "string" || !data.text.trim()) throw new Error(data?.error || "読み取りに失敗しました。");
+      const rawText = data.text;
+      // Make the OCR output available even if article understanding later fails.
+      onRead(rawText, undefined, rawText);
+      setMessage("読み取れました。記事の順番と内容を確認しています…");
+      let finalText = rawText;
       let review: ReadingReview | undefined;
-      let understandingUsed = false;
       try {
+        const regions = Array.isArray(data.ocrRegions) ? data.ocrRegions : [];
+        // Do not organize a partial positional result and silently drop text.
+        const compact = (value: string) => value.replace(/\s/g, "");
+        if (!regions.length || compact(regions.map((r: { text: string }) => r.text).join("")) !== compact(rawText)) {
+          throw new Error("位置情報と読み取り結果が一致しませんでした。");
+        }
         const finalResponse = await fetch("/api/ocr/finalize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageDataUrl: finalImageDataUrl, ocrRegions: allOCRRegions, ocrParts: readParts, stageCount }),
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageDataUrl, ocrRegions: regions, stageCount }), signal: AbortSignal.timeout(65_000),
         });
-        const finalData = await finalResponse.json();
-        if (!finalResponse.ok) throw new Error(finalData.error || "記事全体を理解できませんでした。");
-        finalText = finalData.text.trim();
+        const finalData = await finalResponse.json().catch(() => null);
+        if (!finalResponse.ok || typeof finalData?.text !== "string" || !finalData.text.trim()) throw new Error("記事の確認を完了できませんでした。");
+        finalText = finalData.text;
         review = {
-          summary: finalData.summary || "記事全体の構成を確認しました。",
+          summary: finalData.summary || "記事の順番を確認しました。",
           uncertainSegments: Array.isArray(finalData.uncertainSegments) ? finalData.uncertainSegments : [],
           excludedElements: Array.isArray(finalData.excludedElements) ? finalData.excludedElements : [],
-          confidence: finalData.confidence || "medium",
-          layout: finalData.layout || "mixed",
+          confidence: finalData.confidence || "medium", layout: finalData.layout || "mixed",
         };
-        understandingUsed = true;
-      } catch (finalError) {
-        console.warn("Whole article understanding fallback", finalError);
+      } catch {
+        // Keep the complete raw transcript; no AI-generated substitute.
       }
-      onRead(finalText, review);
-      const dualMessage = dualPassTotal === tileCount ? "各段を通常画像と補正画像で二重に照合しました。" : "高画質画像を優先して読み取りました。";
-      const understandingMessage = understandingUsed
-        ? " 記事理解AIが全体画像を見て、見出し・本文・段のつながり・別記事の混入を確認しました。"
-        : " 記事理解AIを利用できなかったため、Google OCRの下書きを表示しました。文章を確認してください。";
-      setMessage("記事を読み取りました。" + dualMessage + understandingMessage + " 下の学年ボタンから進めます。");
-    } catch (cause) { setMessage("エラー：" + (cause instanceof Error ? cause.message : "読み取りに失敗しました。")); }
-    finally { setReading(false); }
+      onRead(finalText, review, rawText);
+      setMessage(review ? "記事を読み取りました。原文と見比べてから、学年を選んでください。"
+        : "文字は読み取れました。記事の内容確認は完了していません。原文と見比べてから、学年を選んでください。");
+    } catch (cause) {
+      const timeout = cause instanceof Error && (cause.name === "TimeoutError" || cause.name === "AbortError");
+      setMessage("エラー：" + (timeout ? "待ち時間を超えました。少し待ってからお試しください。"
+        : cause instanceof Error ? cause.message : "読み取りに失敗しました。"));
+    } finally { setReading(false); onBusy(false); }
   };
   return <section className="scanner">
     <div className="scanner-head">
       <SectionTitle number="1" title="記事を撮影する" note="読みたい記事を真上から、明るい場所で撮ってください。"/>
       <div className="file-buttons">
-        <label><Camera size={18}/>カメラで撮る<input type="file" accept="image/*" capture="environment" onChange={(event) => load(event.target.files?.[0])}/></label>
-        <label className="sub"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" onChange={(event) => load(event.target.files?.[0])}/></label>
+        <label><Camera size={18}/>カメラで撮る<input type="file" accept="image/*" disabled={reading} capture="environment" onChange={(event) => load(event.target.files?.[0])}/></label>
+        <label className="sub"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" disabled={reading} onChange={(event) => load(event.target.files?.[0])}/></label>
       </div>
     </div>
     {fileName && <div className="crop">
       <SectionTitle number="2" title="写真の向きを整えて、記事を囲む" note={'「記事を囲む」を押し、読みたい記事のまわりを人差し指でなぞってください。\n指を離しても赤線は残ります。斜めなら先に「自動でまっすぐ」を押します。'}/>
       <div className="image-adjustments">
-        <button type="button" disabled={adjusting} onClick={() => rotateImage(-90, "左へ回転しました。記事を囲んでください。")}><RotateCcw size={17}/>左回転</button>
-        <button type="button" className="straighten" disabled={adjusting} onClick={straighten}><Sparkles size={17}/>{adjusting ? "補正中…" : "自動でまっすぐ"}</button>
-        <button type="button" disabled={adjusting} onClick={() => rotateImage(90, "右へ回転しました。記事を囲んでください。")}>右回転<RotateCcw className="rotate-right" size={17}/></button>
-        <button type="button" disabled={adjusting} onClick={restoreOriginal}>元に戻す</button>
+        <button type="button" disabled={adjusting || reading} onClick={() => rotateImage(-90, "左へ回転しました。記事を囲んでください。")}><RotateCcw size={17}/>左回転</button>
+        <button type="button" className="straighten" disabled={adjusting || reading} onClick={straighten}><Sparkles size={17}/>{adjusting ? "補正中…" : "自動でまっすぐ"}</button>
+        <button type="button" disabled={adjusting || reading} onClick={() => rotateImage(90, "右へ回転しました。記事を囲んでください。")}>右回転<RotateCcw className="rotate-right" size={17}/></button>
+        <button type="button" disabled={adjusting || reading} onClick={restoreOriginal}>元に戻す</button>
       </div>
-      <div className="stage-picker"><span>この記事は何段ですか？</span><div>{[1,2,3,4].map((count) => <button type="button" key={count} className={stageCount === count ? "active" : ""} onClick={() => setStageCount(count)}><b>{count}</b>段{count === 1 && <span>（横書きの記事）</span>}</button>)}</div><small>縦書きは、紙面が上下に分かれている数を選びます。</small></div>
+      <div className="stage-picker"><span>この記事は何段ですか？</span><div>{[1,2,3,4].map((count) => <button type="button" disabled={reading} key={count} className={stageCount === count ? "active" : ""} onClick={() => setStageCount(count)}><b>{count}</b>段{count === 1 && <span>（横書きの記事）</span>}</button>)}</div><small>縦書きは、紙面が上下に分かれている数を選びます。</small></div>
       <button type="button" className={tracing ? "trace-guide active" : "trace-guide"} disabled={reading || selectionPath.length > 0} onClick={() => { setTracing(true); setMessage("読みたい記事のまわりを人差し指でなぞってください。"); }}><ScanLine size={20}/><b>{tracing ? "なぞっています" : selectionPath.length ? "囲みを保持しています" : "記事を囲む"}</b><span>{tracing ? "指の動きに沿って、一本の赤線を描きます。" : selectionPath.length ? "よければ読み取り、違えば囲み直してください。" : "押してから、記事のまわりを人差し指でなぞります。"}</span></button>
       <div className={tracing ? "canvas-wrap tracing" : "canvas-wrap"}><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection} onPointerCancel={cancelSelection}/></div>
-      <div className="scan-actions"><button className="reset" onClick={() => { draftPathRef.current = []; setSelectionPath([]); setTracing(false); draw([]); setMessage("「記事を囲む」を押して、もう一度なぞってください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading} onClick={read}><ScanLine size={20}/>{reading ? stageCount + "段を読み取り中…" : "この記事を読み取る"}</button></div>
+      <div className="scan-actions"><button className="reset" disabled={reading} onClick={() => { draftPathRef.current = []; setSelectionPath([]); setTracing(false); draw([]); setMessage("「記事を囲む」を押して、もう一度なぞってください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading || adjusting} onClick={read}><ScanLine size={20}/>{reading ? "記事を読み取り中…" : "この記事を読み取る"}</button></div>
       {message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}
     </div>}
   </section>;
