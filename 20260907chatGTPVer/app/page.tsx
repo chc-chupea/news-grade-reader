@@ -19,7 +19,6 @@ export default function Home() {
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<Result | null>(null), [converting, setConverting] = useState(false);
   const [error, setError] = useState(""), [copied, setCopied] = useState(false);
-  const [readingReview, setReadingReview] = useState<ReadingReview | null>(null);
   const selectedGrade = grades.find((item) => item.id === grade)!;
   const convert = async () => {
     if (!text.trim() || converting || scanning) return;
@@ -33,11 +32,11 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.2</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.3</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
-    <Scanner onBusy={setScanning} onRead={(value, review, source) => { setText(value); setArticleImage(source || null); setReadingReview(review || null); setResult(null); }}/>
+    <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); }}/>
     <section className="workspace">
-      <div className="panel"><SectionTitle number="3" title="読み取った文章" note=""/><p className="digital-paste-note">デジタル記事のテキストは、ここにコピー＆ペーストしてください。</p><p className="edit-note">直したいところがある場合は、ここで直せます。</p>{readingReview && <div className={`reading-review ${readingReview.confidence}`}><b>記事理解AIの確認</b><p>{readingReview.summary}</p>{readingReview.uncertainSegments.length > 0 ? <div><strong>画像で確認しにくい箇所</strong><ul>{readingReview.uncertainSegments.map((item, index) => <li key={index}>{item}</li>)}</ul></div> : <small>AIが指摘した箇所はありません。数字や名前は原文と見比べてください。</small>}{readingReview.excludedElements.length > 0 && <details><summary>本文から外した箇所を確認</summary><ul>{readingReview.excludedElements.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}</div>}<ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setReadingReview(null); setResult(null); }}/></div>
+      <div className="panel"><SectionTitle number="3" title="読み取った文章" note=""/><p className="digital-paste-note">デジタル記事のテキストは、ここにコピー＆ペーストしてください。</p><p className="edit-note">直したいところがある場合は、ここで直せます。</p><ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setResult(null); }}/></div>
       <div className="panel"><SectionTitle number="4" title="読む人の学年を選ぶ" note="学年に合う言葉と文の長さに整えます。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting || scanning} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "向けにする"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像は読み取りのためGoogle Cloudへ、画像と文章は内容の確認・学年別変換のためOpenAI APIへ送信します。</p></div>
     </section>
     {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><p className="article">{result.body}</p><div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem key={index} number={index + 1} question={item.question} answer={item.answer}/>)}</section></div></section>}
@@ -142,7 +141,7 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
   const draftPathRef = useRef<Point[]>([]), pointerIdRef = useRef<number | null>(null), gestureRectRef = useRef<DOMRect | null>(null);
   const [fileName, setFileName] = useState(""), [selectionPath, setSelectionPath] = useState<Point[]>([]);
   const [reading, setReading] = useState(false), [adjusting, setAdjusting] = useState(false), [message, setMessage] = useState("");
-  const [stageCount, setStageCount] = useState(1), [tracing, setTracing] = useState(false);
+  const [tracing, setTracing] = useState(false);
   const lockPage = () => document.documentElement.classList.add("crop-locked");
   const unlockPage = () => {
     document.documentElement.classList.remove("crop-locked");
@@ -228,7 +227,6 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
     if (!file || reading) return;
     setFileName(file.name);
     setSelectionPath([]);
-    setStageCount(1);
     setMessage("画像を読み込んでいます…");
     const image = new Image();
     image.onload = () => {
@@ -346,7 +344,7 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
         }
         const finalResponse = await fetch("/api/ocr/finalize", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageDataUrl, ocrRegions: regions, stageCount }), signal: AbortSignal.timeout(65_000),
+          body: JSON.stringify({ imageDataUrl, ocrRegions: regions }), signal: AbortSignal.timeout(65_000),
         });
         const finalData = await finalResponse.json().catch(() => null);
         if (!finalResponse.ok || typeof finalData?.text !== "string" || !finalData.text.trim()) throw new Error("記事の確認を完了できませんでした。");
@@ -385,7 +383,6 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
         <button type="button" disabled={adjusting || reading} onClick={() => rotateImage(90, "右へ回転しました。記事を囲んでください。")}>右回転<RotateCcw className="rotate-right" size={17}/></button>
         <button type="button" disabled={adjusting || reading} onClick={restoreOriginal}>元に戻す</button>
       </div>
-      <div className="stage-picker"><span>この記事は何段ですか？</span><div>{[1,2,3,4].map((count) => <button type="button" disabled={reading} key={count} className={stageCount === count ? "active" : ""} onClick={() => setStageCount(count)}><b>{count}</b>段{count === 1 && <span>（横書きの記事）</span>}</button>)}</div><small>縦書きは、紙面が上下に分かれている数を選びます。</small></div>
       <button type="button" className={tracing ? "trace-guide active" : "trace-guide"} disabled={reading || selectionPath.length > 0} onClick={() => { setTracing(true); setMessage("読みたい記事のまわりを人差し指でなぞってください。"); }}><ScanLine size={20}/><b>{tracing ? "なぞっています" : selectionPath.length ? "囲みを保持しています" : "記事を囲む"}</b><span>{tracing ? "指の動きに沿って、一本の赤線を描きます。" : selectionPath.length ? "よければ読み取り、違えば囲み直してください。" : "押してから、記事のまわりを人差し指でなぞります。"}</span></button>
       <div className={tracing ? "canvas-wrap tracing" : "canvas-wrap"}><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection} onPointerCancel={cancelSelection}/></div>
       <div className="scan-actions"><button className="reset" disabled={reading} onClick={() => { draftPathRef.current = []; setSelectionPath([]); setTracing(false); draw([]); setMessage("「記事を囲む」を押して、もう一度なぞってください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading || adjusting} onClick={read}><ScanLine size={20}/>{reading ? "記事を読み取り中…" : "この記事を読み取る"}</button></div>

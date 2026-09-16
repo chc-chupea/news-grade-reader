@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.text();
     if (body.length > 4_000_000) return Response.json({ error: "記事の範囲を少し小さくしてください。" }, { status: 413 });
-    const { imageDataUrl, ocrRegions, stageCount = 1 } = JSON.parse(body);
+    const { imageDataUrl, ocrRegions } = JSON.parse(body);
     if (typeof imageDataUrl !== "string" || !/^data:image\/(png|jpeg);base64,/.test(imageDataUrl) || imageDataUrl.length > 3_500_000
         || !Array.isArray(ocrRegions) || !ocrRegions.length || ocrRegions.length > 500
         || !ocrRegions.every((r) => r && typeof r.id === "string" && typeof r.text === "string" && r.text.length <= 2000
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       { role: "user", content: [
         { type: "input_image", image_url: imageDataUrl, detail: "high" },
         { type: "input_text", text: `白い部分は利用者が囲んだ範囲の外です。NDLOCRの行の座標はこの画像と同じピクセル座標です。
-orderedIdsには対象記事の見出しと本文の行IDを読む順に入れてください。縦書きは右から左、列内は上から下。上下の段は上段から下段へ進みます。利用者の段数指定は${Number.isInteger(stageCount) ? Math.max(1, Math.min(4, stageCount)) : 1}です。
+orderedIdsには対象記事の見出しと本文の行IDを読む順に入れてください。画像から段組みを判断してください。段数をあらかじめ決めず、見出し・余白・列の位置・段の境界を画像から確認してください。縦書きは右から左、列内は上から下。上下の段は上段から下段へ進みます。横書きは左から右、上から下へ読みます。
 NDLOCRの元の並び順を基本に、画像から順番の誤りが明確に分かる場合だけ並べ替えてください。
 隣の記事、広告、写真説明、ページ番号と画像で明確に分かる行だけexcludedへ入れ、理由を添えてください。判断に迷う行は残してください。
 全IDをorderedIdsかexcludedのいずれか一方に、ちょうど1回ずつ入れてください。本文を要約して行を省かないでください。
