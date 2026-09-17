@@ -17,6 +17,7 @@ type ElementaryGrade = Extract<Grade, "小4" | "小5" | "小6">;
 type GeneratedResult = {
   title: string;
   body: string;
+  detailBody: string;
   points: string[];
   words: Array<{ term: string; meaning: string }>;
   why: string;
@@ -358,6 +359,35 @@ const gradeSpecs: Record<Grade, GradeSpec> = {
 };
 
 
+const twoStageReadingRules: Record<Grade, string> = {
+  "小4": `【2段階で読む：小4】
+- bodyは「まずわかる」文章。長い記事でも、中心の出来事と、それを理解するために必要な理由・結果を優先し、目安350〜550字程度にする。ただし原文が短い場合は水増ししない。
+- detailBodyは「もっとくわしく読む」。bodyを読んだ子がもう一歩知りたいときに読む続きとして、bodyで省いた重要な人名・日程・手順・補足事情などを、同じ小4向けの言葉で300〜600字程度追加する。
+- detailBodyでも、小4の漢字・語彙ルールを変えない。「詳しい＝難しい文章」にしない。
+- bodyだけで「このニュースは何の話か」が分かり、detailBodyまで読めば元記事の大切な情報をかなり追える形を目指す。`,
+  "小5": `【2段階で読む：小5】
+- bodyは「まずわかる」文章。中心の出来事と主な理由・結果を400〜600字程度を目安に整理する。原文が短ければ水増ししない。
+- detailBodyは「もっとくわしく読む」。bodyで省いた重要な背景、日程、関係する人・組織、手続き、結果などを350〜650字程度で補う。
+- 詳細でも小5が自力で読める説明を保ち、難語を増やすことで情報量を増やさない。`,
+  "小6": `【2段階で読む：小6】
+- bodyは「まずわかる」文章。出来事・理由・結果・影響の中心を450〜650字程度を目安に示す。原文が短ければ水増ししない。
+- detailBodyは「もっとくわしく読む」。元記事の背景、複数の関係、日程、手続き、発言など、理解を深める重要情報を400〜700字程度で補う。
+- 社会語は必要なら残すが、detailBodyでも意味が分からないまま放置しない。`,
+  "中1": `【2段階で読む：中1】
+- bodyは「まずわかる」文章。記事の中心、主な理由・結果、重要な事実を500〜700字程度を目安に整理する。原文が短ければ水増ししない。
+- detailBodyは「もっとくわしく読む」。補足事実、背景、日程、関係者、手続き、発言などを450〜750字程度で加え、元記事の構造がより見えるようにする。
+- 詳細でも、難解な新聞文へ戻さない。`,
+  "中2": `【2段階で読む：中2】
+- bodyは「まずわかる」文章。中心的な内容と主な背景・根拠・影響を550〜800字程度を目安に整理する。原文が短ければ水増ししない。
+- detailBodyは「もっとくわしく読む」。複数の情報の関係、補足の根拠、日程、立場、発言などを500〜800字程度で加える。
+- 情報量は増やしても、原文の省略や長文をそのまま戻さない。`,
+  "中3": `【2段階で読む：中3】
+- bodyは「まずわかる」文章。記事の中心と論理の流れを650〜900字程度を目安に整理する。原文が短ければ水増ししない。
+- detailBodyは「もっとくわしく読む」。元記事の重要な補足情報、根拠、背景、日程、発言、条件などを550〜900字程度で加え、原文へ戻る橋渡しにする。
+- 「詳しい＝難しくする」ではない。元記事の論理と情報量に近づけつつ、読みやすさは維持する。`,
+};
+
+
 type TextField = { path: string; text: string };
 type KanjiAudit = {
   needsReview: boolean;
@@ -373,6 +403,7 @@ function resultTextFields(result: GeneratedResult): TextField[] {
   const fields: TextField[] = [
     { path: "title", text: result.title },
     { path: "body", text: result.body },
+    { path: "detailBody", text: result.detailBody },
     { path: "why", text: result.why },
     { path: "relation", text: result.relation },
   ];
@@ -526,7 +557,7 @@ ${grade}の学習段階で一般的に読めるか、ニュース理解に必要
 対象学年は「${grade}」です。
 
 この工程では、内容を作り直してはいけません。
-事実、数字、固有名詞、発言者、因果関係、pointsの役割、quizの問いと答えの対応を維持し、
+事実、数字、固有名詞、発言者、因果関係、bodyとdetailBodyの役割分担、pointsの役割、quizの問いと答えの対応を維持し、
 漢字の読みや語の難しさに必要な修正だけを行ってください。
 元の文章が持っている「${grade}の子に分かる順番で教える先生」の説明の自然さ・親しみやすさ・発見の流れも壊さないでください。
 
@@ -574,6 +605,7 @@ function makeSchema(wordCount: number) {
     properties: {
       title: { type: "string" },
       body: { type: "string" },
+      detailBody: { type: "string" },
       points: {
         type: "array",
         minItems: 3,
@@ -611,7 +643,7 @@ function makeSchema(wordCount: number) {
         },
       },
     },
-    required: ["title", "body", "points", "words", "why", "relation", "quiz"],
+    required: ["title", "body", "detailBody", "points", "words", "why", "relation", "quiz"],
   };
 }
 
@@ -644,8 +676,8 @@ export async function POST(request: Request) {
 
 最重要方針：
 1. 指定学年の子が「自分で読んで分かった」と感じられることを最優先する。単に語彙を置換するだけではなく、必要なら情報の順番や文の切り方を組み替える。
-2. bodyだけでなく、title / points / words / why / relation / quiz のすべてを同じ学年レベルにそろえる。
-3. 「新聞記事の要約」ではなく「新聞記事の学年別リライト」を行う。大切な事実や論理を削りすぎない。
+2. bodyだけでなく、title / detailBody / points / words / why / relation / quiz のすべてを同じ学年レベルにそろえる。
+3. 「新聞記事の要約」で終わらせず、2段階の「学年別リライト」を行う。bodyではまず理解できる中心を示し、detailBodyで重要な補足情報へ進める。
 4. 記事にない理由・背景・評価・動機・将来予測を補わない。
 5. quizは必ず変換後のbodyだけを読めば答えられるようにする。
 6. 漢字の「読めるか」と語の「意味が分かるか」を別々に判定する。読みづらい漢字には読みを補い、意味が難しい語には説明を補う。
@@ -663,6 +695,8 @@ ${spec.readability}
 
 ${spec.teacherStyle}
 
+${twoStageReadingRules[selectedGrade]}
+
 ${spec.bodyRule}
 
 ${spec.pointsRule}
@@ -672,6 +706,14 @@ ${spec.wordsRule}
 ${spec.whyRule}
 
 ${spec.quizRule}
+
+【detailBody：「もっとくわしく読む」】
+- bodyを読んだ後に、さらに知りたい子が読む発展部分として書く。
+- 元記事にあるがbodyでは省いた重要情報を優先する。単なるbodyの言い換えや全文の繰り返しにしない。
+- 新しく出す事実は、必ず元記事に書かれているものだけにする。
+- detailBodyでも指定学年の漢字・語彙・説明姿勢を厳守する。
+- detailBodyだけに出る難しい言葉は、必要ならその場で短く意味を補う。
+- 興味のある子が「もう少し読んでみよう」と思えるよう、情報のつながりを分かる順番で示す。煽りや過度な呼びかけはしない。
 
 【title】
 - 元見出しの意味を保ちながら、${selectedGrade}が内容を予想できる分かりやすい見出しにする。
@@ -692,6 +734,7 @@ ${spec.quizRule}
 
 【全欄の整合性ルール】
 - pointsの3点は、変換後のbodyに書かれている内容だけから作る。
+- detailBodyはbodyと矛盾せず、元記事にある重要な補足情報だけを加える。
 - wordsのtermは原則としてbodyに実際に出す重要語から選ぶ。
 - whyはbodyと矛盾しない。
 - quizのanswerは、bodyのどこかから直接確認できる内容にする。
@@ -700,7 +743,9 @@ ${spec.quizRule}
 
 【難しさの最終チェック】
 出力を確定する前に、内部で次を確認し、問題があれば直してからJSONを返すこと。
-- bodyだけやさしく、points / words / why / quizだけ難しくなっていないか。
+- bodyだけやさしく、detailBody / points / words / why / quizだけ難しくなっていないか。
+- bodyが長い記事の情報を抱え込みすぎていないか。「まずわかる」と「もっとくわしく読む」に役割分担できているか。
+- detailBodyがbodyの繰り返しではなく、元記事にある重要な追加情報を学年相応に補っているか。
 - 文章を短くしただけ、漢字に読みを付けただけで「説明したつもり」になっていないか。
 - 指定学年の子が途中で「それって何？」「なぜ急にそうなるの？」となる前提飛ばしがないか。
 - 最初から最後まで、情報の順番がその学年にとって自然か。必要なら「何が起きた→理由→結果」のように並べ直せているか。
