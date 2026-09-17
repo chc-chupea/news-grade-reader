@@ -48,10 +48,11 @@ test('review endpoint validates payload and sends only selected crop for review'
   assert.equal((await response.json()).correctedText, '');
   assert.equal(calls, 1);
 });
-test('old raw transcript disclosure is removed; image editor and undo are present', () => {
+test('raw transcript and duplicate review panel are removed; image selection remains', () => {
   const page = readFileSync(new URL('../app/page.tsx', import.meta.url), 'utf8');
   const editor = readFileSync(new URL('../app/article-editor.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(page, /整理前の読み取り結果を見る|setRawOCR/);
   assert.match(page, /<ArticleEditor/);
-  assert.match(editor, /直前の修正を戻す/);
+  assert.doesNotMatch(editor, /気になる文字を確認する|AIにこの画像を確認してもらう/);
+  assert.match(editor, /setSelectionRange/);
 });

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import ArticleEditor, { type ArticleImage } from "./article-editor";
+import { normalizeGeneratedResult } from "@/lib/display-text";
 import { Camera, Check, Copy, ImagePlus, RotateCcw, ScanLine, Sparkles } from "lucide-react";
 
 type Point = { x: number; y: number };
@@ -27,12 +28,12 @@ export default function Home() {
       const response = await fetch("/api/convert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.trim(), grade }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "変換に失敗しました。");
-      setResult(data); setTimeout(() => document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" }), 50);
+      setResult(normalizeGeneratedResult(data)); setTimeout(() => document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "変換に失敗しました。"); }
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.3</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.4</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); }}/>
     <section className="workspace">

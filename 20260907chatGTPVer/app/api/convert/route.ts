@@ -1,4 +1,5 @@
 import { askOpenAI, errorResponse } from "@/lib/openai";
+import { normalizeGeneratedResult } from "@/lib/display-text";
 
 const grades = new Set(["小4", "小5", "小6", "中1", "中2", "中3"]);
 const schema = {
@@ -103,16 +104,17 @@ ${sectionRules[grade]}
 - quizは必ず記事の内容だけで答えられる問いにする。記事にない知識や難しい推測を求めない。
 - quizの各項目はquestionとanswerの組にする。answerは記事本文から確認できる、指定学年に合った短い答えにする。
 - 原文から答えを確認できない問題は作らない。
+- 本文は途中に強制改行や空行を入れず、続けて書く。表示エリアの幅で自然に折り返すため、改行コードやバックスラッシュとnの文字も含めない。
 
 記事：
 ${text.trim()}`,
       }],
     }], schema) as { words: Array<{ term: string; meaning: string }> } & Record<string, unknown>;
 
-    return Response.json({
+    return Response.json(normalizeGeneratedResult({
       ...result,
       words: result.words.map(({ term, meaning }) => [term, meaning]),
-    });
+    }));
   } catch (error) {
     return errorResponse(error);
   }
