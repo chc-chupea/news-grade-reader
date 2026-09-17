@@ -36,11 +36,11 @@ export default function Home() {
   };
   return <main>
     <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.6</b></div></header>
-    <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
+    <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow" aria-label="使い方の順番"><span><b>1</b>えらぶ</span><span><b>2</b>囲む</span><span><b>3</b>たしかめる</span><span><b>4</b>学年</span></div></section>
     <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); }}/>
     <section className="workspace">
-      <div className="panel"><SectionTitle number="3" title="読み取った文章" note=""/><p className="digital-paste-note">デジタル記事のテキストは、ここにコピー＆ペーストしてください。</p><p className="edit-note">直したいところがある場合は、ここで直せます。</p><ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setResult(null); }}/></div>
-      <div className="panel"><SectionTitle number="4" title="読む人の学年を選ぶ" note="学年に合う言葉と文の長さに整えます。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting || scanning} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "向けにする"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像は読み取りのためGoogle Cloudへ、画像と文章は内容の確認・学年別変換のためOpenAI APIへ送信します。</p></div>
+      <div className="panel" id="check-article"><SectionTitle number="3" title="読みまちがいを直そう" note=""/><p className="digital-paste-note">ネットの記事は、文章をコピーして下にはりつけても使えます。</p><p className="edit-note">写真と文章を見くらべて、ちがう文字を直してね。</p><ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setResult(null); }}/>{text.trim() && <a className="next-step" href="#choose-grade">たしかめたら、学年をえらぶ ↓</a>}</div>
+      <div className="panel" id="choose-grade"><SectionTitle number="4" title="読む人の学年をえらぼう" note="学年をえらんで、下の青いボタンを押してね。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting || scanning} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "の言葉で読む"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像は読み取りのためGoogle Cloudへ、画像と文章は内容の確認・学年別変換のためOpenAI APIへ送信します。</p></div>
     </section>
     {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><p className="article">{result.body}</p><div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem key={index} number={index + 1} question={item.question} answer={item.answer}/>)}</section></div></section>}
     <footer>新聞記事 AI学年別理解サポート（試作版）</footer>
@@ -334,7 +334,7 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     unlockPage();
     setTracing(false);
-    setMessage("囲みを保持しました。「囲みを微調整」で赤線を動かせます。よければ読み取ってください。");
+    setMessage("囲みを保持しました。「線を動かす」で赤線を動かせます。よければ読み取ってください。");
   };
   const cancelSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (pointerIdRef.current !== event.pointerId) return;
@@ -427,22 +427,25 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
   };
   return <section className="scanner">
     <div className="scanner-head">
-      <SectionTitle number="1" title="記事を撮影する" note="読みたい記事を真上から、明るい場所で撮ってください。"/>
+      <SectionTitle number="1" title="読みたい記事をえらぼう" note="新聞記事をカメラで撮るか、保存した写真をえらんでね。"/>
       <div className="file-buttons">
         <label><Camera size={18}/>カメラで撮る<input type="file" accept="image/*" disabled={reading} capture="environment" onChange={(event) => load(event.target.files?.[0])}/></label>
-        <label className="sub"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" disabled={reading} onChange={(event) => load(event.target.files?.[0])}/></label>
+        <label className="sub"><ImagePlus size={18}/>写真をえらぶ<input type="file" accept="image/*" disabled={reading} onChange={(event) => load(event.target.files?.[0])}/></label>
       </div>
     </div>
-    {fileName && <div className={cropExpanded ? "crop crop-expanded" : "crop"}>
-      <button type="button" className="crop-expand" onClick={() => setCropExpanded(!cropExpanded)}>{cropExpanded ? "通常の表示に戻す" : "大きな画面で囲む"}</button>
-      <SectionTitle number="2" title="写真の向きを整えて、記事を囲む" note={'「記事を囲む」を押し、読みたい記事のまわりを人差し指でなぞってください。\n指を離しても赤線は残ります。斜めなら先に「自動でまっすぐ」を押します。'}/>
+    {fileName && <div className="photo-setup"><p>写真が横向き・ななめなら、ここで直そう。</p>
       <div className="image-adjustments">
-        <button type="button" disabled={adjusting || reading} onClick={() => rotateImage(-90, "左へ回転しました。記事を囲んでください。")}><RotateCcw size={17}/>左回転</button>
-        <button type="button" className="straighten" disabled={adjusting || reading} onClick={straighten}><Sparkles size={17}/>{adjusting ? "補正中…" : "自動でまっすぐ"}</button>
-        <button type="button" disabled={adjusting || reading} onClick={() => rotateImage(90, "右へ回転しました。記事を囲んでください。")}>右回転<RotateCcw className="rotate-right" size={17}/></button>
-        <button type="button" disabled={adjusting || reading} onClick={restoreOriginal}>元に戻す</button>
+        <button type="button" disabled={adjusting || reading} onClick={() => rotateImage(-90, "左へ回転しました。記事を囲んでください。")}><RotateCcw size={17}/>左に回す</button>
+        <button type="button" className="straighten" disabled={adjusting || reading} onClick={straighten}><Sparkles size={17}/>{adjusting ? "直しています…" : "自動でまっすぐ"}</button>
+        <button type="button" disabled={adjusting || reading} onClick={() => rotateImage(90, "右へ回転しました。記事を囲んでください。")}>右に回す<RotateCcw className="rotate-right" size={17}/></button>
+        <button type="button" disabled={adjusting || reading} onClick={restoreOriginal}>写真をもとに戻す</button>
       </div>
-      <button type="button" className={tracing ? "trace-guide active" : "trace-guide"} disabled={reading || selectionPath.length > 0} onClick={() => { setTracing(true); setMessage("読みたい記事のまわりを人差し指でなぞってください。"); }}><ScanLine size={20}/><b>{tracing ? "なぞっています" : selectionPath.length ? "囲みを保持しています" : "記事を囲む"}</b><span>{tracing ? "指の動きに沿って、一本の赤線を描きます。" : selectionPath.length ? "よければ読み取り、「囲みを微調整」で赤線を動かせます。" : "押してから、記事のまわりを人差し指でなぞります。"}</span></button>
+    </div>}
+    {fileName && <div className={cropExpanded ? "crop crop-expanded" : "crop"}>
+      <button type="button" className="crop-expand" onClick={() => setCropExpanded(!cropExpanded)}>{cropExpanded ? "もとの大きさに戻す" : "大きな画面で囲む"}</button>
+      <SectionTitle number="2" title="読みたいところを指定しよう" note={'「記事を囲む」を押して、読みたいところを指で囲んでね。'}/>
+
+      <button type="button" className={tracing ? "trace-guide active" : "trace-guide"} disabled={reading || selectionPath.length > 0} onClick={() => { setTracing(true); setMessage("読みたい記事のまわりを人差し指でなぞってください。"); }}><ScanLine size={20}/><b>{tracing ? "なぞっています" : selectionPath.length ? "囲めたよ" : "記事を囲む"}</b><span>{tracing ? "指の動きに沿って、一本の赤線を描きます。" : selectionPath.length ? "よければ読み取り、「線を動かす」で赤線を動かせます。" : "押してから、記事のまわりを人差し指でなぞります。"}</span></button>
       <div className={tracing || editing ? "canvas-wrap tracing" : "canvas-wrap"}><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection} onPointerCancel={cancelSelection}/></div>
       {selectionPath.length >= 3 && <div className="scan-actions">
         <button type="button" className="reset" disabled={reading || adjusting} onClick={() => {
@@ -454,12 +457,12 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
           const next = straightenOutline(simplified, rect.width / canvas.width, rect.height / canvas.height);
           setHistory(items => [...items.slice(-19), selectionPath]);
           setSelectionPath(next);
-          setMessage("水平・垂直に近い線を整えました。「ひとつ戻す」で元に戻せます。");
+          setMessage("たて・よこの線を整えたよ。「ひとつ戻す」で戻せます。");
         }}>線を整える</button>
-        <button type="button" className="reset" disabled={reading || adjusting} onClick={() => { setEditing(!editing); setMessage(editing ? "囲みを保持しました。読み取れます。" : "赤線の直したいところを押したまま動かしてください。線の近くならつかめます。"); }}>{editing ? "微調整を終える" : "囲みを微調整"}</button>
+        <button type="button" className="reset" disabled={reading || adjusting} onClick={() => { setEditing(!editing); setMessage(editing ? "囲みができました。次は「この記事を読み取る」を押してね。" : "赤線の直したいところを押したまま動かしてください。線の近くならつかめます。"); }}>{editing ? "線の直しを終える" : "線を動かす"}</button>
         <button type="button" className="reset" disabled={reading || !history.length} onClick={() => { setSelectionPath(history[history.length-1]); setHistory(history.slice(0,-1)); }}>ひとつ戻す</button>
       </div>}
-      <div className="scan-actions"><button className="reset" disabled={reading} onClick={() => { stopFrame(); draftPathRef.current = []; setSelectionPath([]); setTracing(false); setEditing(false); setHistory([]); draw([]); setMessage("「記事を囲む」を押して、もう一度なぞってください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading || adjusting} onClick={read}><ScanLine size={20}/>{reading ? "記事を読み取り中…" : "この記事を読み取る"}</button></div>
+      <div className="scan-actions"><button className="reset" disabled={reading || adjusting} onClick={() => { stopFrame(); draftPathRef.current = []; setSelectionPath([]); setTracing(true); setEditing(false); setHistory([]); draw([]); setMessage("もう一度、読みたいところを指で囲んでね。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading || adjusting} onClick={read}><ScanLine size={20}/>{reading ? "記事を読み取り中…" : "この記事を読み取る"}</button></div>
       {message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}
     </div>}
   </section>;
