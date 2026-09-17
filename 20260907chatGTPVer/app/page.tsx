@@ -35,7 +35,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.5</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.6</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); }}/>
     <section className="workspace">
@@ -136,6 +136,8 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
   const [reading, setReading] = useState(false), [adjusting, setAdjusting] = useState(false), [message, setMessage] = useState("");
   const [tracing, setTracing] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [cropExpanded, setCropExpanded] = useState(false);
+  useEffect(() => { if (!cropExpanded) return; const previous = document.body.style.overflow; document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = previous; }; }, [cropExpanded]);
   const [history, setHistory] = useState<Point[][]>([]);
   const editIndex = useRef(-1), beforeEdit = useRef<Point[]>([]);
   const editBase = useRef<Point[]>([]), dragStart = useRef<Point>({x:0,y:0});
@@ -347,6 +349,7 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
   const read = async () => {
     const image = imageRef.current, canvas = canvasRef.current;
     if (!image || !canvas || selectionPath.length < 3 || reading) return;
+    setCropExpanded(false);
     setReading(true); onBusy(true); setMessage("記事の画像を準備しています…");
     try {
       const xs = selectionPath.map((point) => point.x), ys = selectionPath.map((point) => point.y);
@@ -430,7 +433,8 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
         <label className="sub"><ImagePlus size={18}/>画像を選ぶ<input type="file" accept="image/*" disabled={reading} onChange={(event) => load(event.target.files?.[0])}/></label>
       </div>
     </div>
-    {fileName && <div className="crop">
+    {fileName && <div className={cropExpanded ? "crop crop-expanded" : "crop"}>
+      <button type="button" className="crop-expand" onClick={() => setCropExpanded(!cropExpanded)}>{cropExpanded ? "通常の表示に戻す" : "大きな画面で囲む"}</button>
       <SectionTitle number="2" title="写真の向きを整えて、記事を囲む" note={'「記事を囲む」を押し、読みたい記事のまわりを人差し指でなぞってください。\n指を離しても赤線は残ります。斜めなら先に「自動でまっすぐ」を押します。'}/>
       <div className="image-adjustments">
         <button type="button" disabled={adjusting || reading} onClick={() => rotateImage(-90, "左へ回転しました。記事を囲んでください。")}><RotateCcw size={17}/>左回転</button>
