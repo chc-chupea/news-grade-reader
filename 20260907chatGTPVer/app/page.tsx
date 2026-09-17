@@ -1,5 +1,7 @@
 "use client";
 
+import { straightenOutline } from "@/lib/crop-path";
+
 import { useEffect, useRef, useState } from "react";
 import ArticleEditor, { type ArticleImage } from "./article-editor";
 import { normalizeGeneratedResult } from "@/lib/display-text";
@@ -33,7 +35,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.4</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.5</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow"><span><b>1</b>撮る</span><span><b>2</b>囲む</span><span><b>3</b>学年を選ぶ</span></div></section>
     <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); }}/>
     <section className="workspace">
@@ -123,18 +125,8 @@ function simplifyPath(points: Point[], tolerance: number): Point[] {
 }
 
 function stabilizePath(points: Point[], width: number, height: number) {
-  if (points.length < 3) return points;
-  const smoothed = smoothPath(smoothPath(points));
-  const simplified = simplifyPath(smoothed, Math.max(1.5, Math.hypot(width, height) / 360));
-  const stabilized: Point[] = [simplified[0]];
-  for (const point of simplified.slice(1)) {
-    const previous = stabilized[stabilized.length - 1];
-    const dx = point.x - previous.x, dy = point.y - previous.y;
-    if (Math.abs(dx) < Math.abs(dy) * .14) stabilized.push({ x: previous.x, y: point.y });
-    else if (Math.abs(dy) < Math.abs(dx) * .14) stabilized.push({ x: point.x, y: previous.y });
-    else stabilized.push(point);
-  }
-  return stabilized;
+  // Preserve the finger's shape; do not snap edges to horizontal or vertical.
+  return simplifyPath(points, Math.max(.5, Math.hypot(width, height) / 1800));
 }
 
 function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: (text: string, review?: ReadingReview, source?: ArticleImage) => void }) {
@@ -143,6 +135,25 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
   const [fileName, setFileName] = useState(""), [selectionPath, setSelectionPath] = useState<Point[]>([]);
   const [reading, setReading] = useState(false), [adjusting, setAdjusting] = useState(false), [message, setMessage] = useState("");
   const [tracing, setTracing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [history, setHistory] = useState<Point[][]>([]);
+  const editIndex = useRef(-1), beforeEdit = useRef<Point[]>([]);
+  const editBase = useRef<Point[]>([]), dragStart = useRef<Point>({x:0,y:0});
+  const editWeights = useRef<number[]>([]);
+  const moveEditedLine = (point: Point) => {
+    const canvas = canvasRef.current!;
+    draftPathRef.current = editBase.current.map((p, i) => ({
+      x: Math.max(0, Math.min(canvas.width, p.x+(point.x-dragStart.current.x)*editWeights.current[i])),
+      y: Math.max(0, Math.min(canvas.height, p.y+(point.y-dragStart.current.y)*editWeights.current[i])),
+    }));
+  };
+  const frame = useRef<number | null>(null);
+  const previewRef = useRef<HTMLCanvasElement | null>(null);
+  const scheduleDraw = (completed: boolean) => {
+    if (frame.current !== null) return;
+    frame.current = requestAnimationFrame(() => { frame.current = null; draw(draftPathRef.current, completed); });
+  };
+  const stopFrame = () => { if (frame.current !== null) cancelAnimationFrame(frame.current); frame.current = null; };
   const lockPage = () => document.documentElement.classList.add("crop-locked");
   const unlockPage = () => {
     document.documentElement.classList.remove("crop-locked");
@@ -151,7 +162,7 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
     const canvas = canvasRef.current, image = imageRef.current;
     if (!canvas || !image) return;
     const context = canvas.getContext("2d"); if (!context) return;
-    context.clearRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    context.clearRect(0, 0, canvas.width, canvas.height); context.drawImage(previewRef.current || image, 0, 0, canvas.width, canvas.height);
     if (path.length < 2) return;
     if (completed && path.length > 2) {
       context.save();
@@ -168,14 +179,14 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
     context.moveTo(path[0].x, path[0].y);
     for (const point of path.slice(1)) context.lineTo(point.x, point.y);
     if (completed && path.length > 2) context.closePath();
-    context.strokeStyle = "#df3e32"; context.lineWidth = Math.max(4, canvas.width / 220); context.setLineDash([14, 8]);
+    context.strokeStyle = "#df3e32"; context.lineWidth = Math.max(4, canvas.width / 220); context.lineJoin = "round"; context.lineCap = "round"; context.setLineDash([]);
     context.stroke(); context.setLineDash([]);
   };
-  useEffect(() => { draw(); }, [selectionPath]);
+  useEffect(() => { draw(); }, [selectionPath, editing]);
   useEffect(() => {
     const stopTouchScroll = (event: TouchEvent) => { if (pointerIdRef.current !== null) event.preventDefault(); };
     document.addEventListener("touchmove", stopTouchScroll, { passive: false });
-    return () => { document.removeEventListener("touchmove", stopTouchScroll); unlockPage(); };
+    return () => { document.removeEventListener("touchmove", stopTouchScroll); unlockPage(); stopFrame(); };
   }, []);
   const showImage = (image: HTMLImageElement, nextMessage: string) => {
     imageRef.current = image;
@@ -184,6 +195,11 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
     const scale = Math.min(1, 1100 / image.naturalWidth);
     canvas.width = Math.round(image.naturalWidth * scale);
     canvas.height = Math.round(image.naturalHeight * scale);
+    const preview = document.createElement("canvas");
+    preview.width = canvas.width; preview.height = canvas.height;
+    preview.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+    previewRef.current = preview;
+    stopFrame(); setEditing(false); setHistory([]);
     setSelectionPath([]);
     setTracing(false);
     setMessage(nextMessage);
@@ -245,32 +261,69 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
     return { x: Math.max(0, Math.min(canvas.width, (event.clientX - rect.left) * canvas.width / rect.width)), y: Math.max(0, Math.min(canvas.height, (event.clientY - rect.top) * canvas.height / rect.height)) };
   };
   const beginSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!tracing || selectionPath.length) return;
+    if (reading || adjusting || pointerIdRef.current !== null || (!tracing && !editing)) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
     gestureRectRef.current = rect;
-    pointerIdRef.current = event.pointerId;
     const point = position(event, rect);
-    draftPathRef.current = [point];
+    if (editing) {
+      let distance = Infinity, segment = -1, projected = point;
+      selectionPath.forEach((a, i) => {
+        const b = selectionPath[(i + 1) % selectionPath.length];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const t = Math.max(0, Math.min(1, ((point.x-a.x)*dx+(point.y-a.y)*dy)/(dx*dx+dy*dy || 1)));
+        const q = {x:a.x+t*dx, y:a.y+t*dy};
+        const d = Math.hypot((q.x-point.x)*rect.width/event.currentTarget.width, (q.y-point.y)*rect.height/event.currentTarget.height);
+        if (d < distance) { distance=d; segment=i; projected=q; }
+      });
+      if (distance > 28 || segment < 0) { gestureRectRef.current=null; return; }
+      beforeEdit.current = selectionPath;
+      draftPathRef.current = [...selectionPath];
+      editIndex.current = segment + 1;
+      draftPathRef.current.splice(editIndex.current, 0, projected);
+      editBase.current = [...draftPathRef.current]; dragStart.current = point;
+      const base = editBase.current, count = base.length;
+      const distances = Array(count).fill(Infinity); distances[editIndex.current] = 0;
+      for (const direction of [-1, 1]) {
+        let length = 0, previous = editIndex.current;
+        for (let step = 1; step < count; step++) {
+          const i = (editIndex.current + direction*step + count) % count;
+          length += Math.hypot((base[i].x-base[previous].x)*rect.width/event.currentTarget.width, (base[i].y-base[previous].y)*rect.height/event.currentTarget.height);
+          distances[i] = Math.min(distances[i], length); previous = i;
+        }
+      }
+      editWeights.current = distances.map((d) => d >= 36 ? 0 : (1+Math.cos(Math.PI*d/36))/2);
+    } else { draftPathRef.current = [point]; }
+    pointerIdRef.current = event.pointerId;
     lockPage();
     event.currentTarget.setPointerCapture(event.pointerId);
-    draw(smoothPath(draftPathRef.current), false);
+    scheduleDraw(editing);
   };
   const moveSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!draftPathRef.current.length || pointerIdRef.current !== event.pointerId) return;
     event.preventDefault();
-    const point = position(event);
-    const previous = draftPathRef.current[draftPathRef.current.length - 1];
-    if (Math.hypot(point.x - previous.x, point.y - previous.y) < Math.max(2, canvasRef.current!.width / 500)) return;
-    draftPathRef.current.push(point);
-    draw(smoothPath(draftPathRef.current), false);
+    if (editing) {
+      moveEditedLine(position(event));
+    } else {
+      const samples = event.nativeEvent.getCoalescedEvents?.() || [];
+      for (const sample of samples.length ? samples : [event.nativeEvent]) {
+        const rect = gestureRectRef.current!, canvas = event.currentTarget;
+        const point = { x: Math.max(0, Math.min(canvas.width, (sample.clientX-rect.left)*canvas.width/rect.width)), y: Math.max(0, Math.min(canvas.height, (sample.clientY-rect.top)*canvas.height/rect.height)) };
+        const previous = draftPathRef.current[draftPathRef.current.length-1];
+        if (Math.hypot(point.x-previous.x,point.y-previous.y) >= .5) draftPathRef.current.push(point);
+      }
+    }
+    scheduleDraw(editing);
   };
   const finishSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!draftPathRef.current.length || pointerIdRef.current !== event.pointerId) return;
     event.preventDefault();
     const point = position(event);
-    const finalPath = stabilizePath([...draftPathRef.current, point], event.currentTarget.width, event.currentTarget.height);
+    stopFrame();
+    if (editing) moveEditedLine(point);
+    const finalPath = editing ? [...draftPathRef.current] : stabilizePath([...draftPathRef.current, point], event.currentTarget.width, event.currentTarget.height);
+    if (editing) setHistory((items) => [...items.slice(-19), beforeEdit.current]);
     setSelectionPath(finalPath);
     draw(finalPath);
     draftPathRef.current = [];
@@ -279,11 +332,12 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     unlockPage();
     setTracing(false);
-    setMessage("囲みを保持しました。よければ「この記事を読み取る」を押してください。");
+    setMessage("囲みを保持しました。「囲みを微調整」で赤線を動かせます。よければ読み取ってください。");
   };
   const cancelSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (pointerIdRef.current !== event.pointerId) return;
-    if (draftPathRef.current.length > 2) setSelectionPath([...draftPathRef.current]);
+    stopFrame();
+    draw(selectionPath);
     draftPathRef.current = [];
     pointerIdRef.current = null;
     gestureRectRef.current = null;
@@ -384,9 +438,24 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
         <button type="button" disabled={adjusting || reading} onClick={() => rotateImage(90, "右へ回転しました。記事を囲んでください。")}>右回転<RotateCcw className="rotate-right" size={17}/></button>
         <button type="button" disabled={adjusting || reading} onClick={restoreOriginal}>元に戻す</button>
       </div>
-      <button type="button" className={tracing ? "trace-guide active" : "trace-guide"} disabled={reading || selectionPath.length > 0} onClick={() => { setTracing(true); setMessage("読みたい記事のまわりを人差し指でなぞってください。"); }}><ScanLine size={20}/><b>{tracing ? "なぞっています" : selectionPath.length ? "囲みを保持しています" : "記事を囲む"}</b><span>{tracing ? "指の動きに沿って、一本の赤線を描きます。" : selectionPath.length ? "よければ読み取り、違えば囲み直してください。" : "押してから、記事のまわりを人差し指でなぞります。"}</span></button>
-      <div className={tracing ? "canvas-wrap tracing" : "canvas-wrap"}><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection} onPointerCancel={cancelSelection}/></div>
-      <div className="scan-actions"><button className="reset" disabled={reading} onClick={() => { draftPathRef.current = []; setSelectionPath([]); setTracing(false); draw([]); setMessage("「記事を囲む」を押して、もう一度なぞってください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading || adjusting} onClick={read}><ScanLine size={20}/>{reading ? "記事を読み取り中…" : "この記事を読み取る"}</button></div>
+      <button type="button" className={tracing ? "trace-guide active" : "trace-guide"} disabled={reading || selectionPath.length > 0} onClick={() => { setTracing(true); setMessage("読みたい記事のまわりを人差し指でなぞってください。"); }}><ScanLine size={20}/><b>{tracing ? "なぞっています" : selectionPath.length ? "囲みを保持しています" : "記事を囲む"}</b><span>{tracing ? "指の動きに沿って、一本の赤線を描きます。" : selectionPath.length ? "よければ読み取り、「囲みを微調整」で赤線を動かせます。" : "押してから、記事のまわりを人差し指でなぞります。"}</span></button>
+      <div className={tracing || editing ? "canvas-wrap tracing" : "canvas-wrap"}><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection} onPointerCancel={cancelSelection}/></div>
+      {selectionPath.length >= 3 && <div className="scan-actions">
+        <button type="button" className="reset" disabled={reading || adjusting} onClick={() => {
+          if (pointerIdRef.current !== null) return;
+          const canvas = canvasRef.current; if (!canvas) return;
+          const rect = canvas.getBoundingClientRect();
+          const simplified = simplifyPath(selectionPath, 2 * canvas.width / rect.width);
+          if (simplified.length < 3) return;
+          const next = straightenOutline(simplified, rect.width / canvas.width, rect.height / canvas.height);
+          setHistory(items => [...items.slice(-19), selectionPath]);
+          setSelectionPath(next);
+          setMessage("水平・垂直に近い線を整えました。「ひとつ戻す」で元に戻せます。");
+        }}>線を整える</button>
+        <button type="button" className="reset" disabled={reading || adjusting} onClick={() => { setEditing(!editing); setMessage(editing ? "囲みを保持しました。読み取れます。" : "赤線の直したいところを押したまま動かしてください。線の近くならつかめます。"); }}>{editing ? "微調整を終える" : "囲みを微調整"}</button>
+        <button type="button" className="reset" disabled={reading || !history.length} onClick={() => { setSelectionPath(history[history.length-1]); setHistory(history.slice(0,-1)); }}>ひとつ戻す</button>
+      </div>}
+      <div className="scan-actions"><button className="reset" disabled={reading} onClick={() => { stopFrame(); draftPathRef.current = []; setSelectionPath([]); setTracing(false); setEditing(false); setHistory([]); draw([]); setMessage("「記事を囲む」を押して、もう一度なぞってください。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading || adjusting} onClick={read}><ScanLine size={20}/>{reading ? "記事を読み取り中…" : "この記事を読み取る"}</button></div>
       {message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}
     </div>}
   </section>;

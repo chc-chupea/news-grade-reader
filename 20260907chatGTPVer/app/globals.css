@@ -39,3 +39,5 @@
   .character-review { padding: 10px; }
   .review-grid { grid-template-columns: minmax(0, .65fr) minmax(0, 1fr); gap: 10px; font-size: 14px; }
 }
+
+.scan-actions{flex-wrap:wrap;margin-top:8px}
