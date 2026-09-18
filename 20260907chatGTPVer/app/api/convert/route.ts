@@ -22,7 +22,7 @@ type GeneratedResult = {
   words: Array<{ term: string; meaning: string }>;
   why: string;
   relation: string;
-  quiz: Array<{ question: string; answer: string }>;
+  quiz: Array<{ question: string; answer: string; evidence: string }>;
 };
 
 /**
@@ -420,6 +420,7 @@ function resultTextFields(result: GeneratedResult): TextField[] {
   result.quiz.forEach((item, index) => {
     fields.push({ path: `quiz[${index}].question`, text: item.question });
     fields.push({ path: `quiz[${index}].answer`, text: item.answer });
+    fields.push({ path: `quiz[${index}].evidence`, text: item.evidence });
   });
 
   return fields;
@@ -557,7 +558,7 @@ ${grade}の学習段階で一般的に読めるか、ニュース理解に必要
 対象学年は「${grade}」です。
 
 この工程では、内容を作り直してはいけません。
-事実、数字、固有名詞、発言者、因果関係、bodyとdetailBodyの役割分担、pointsの役割、quizの問いと答えの対応を維持し、
+事実、数字、固有名詞、発言者、因果関係、bodyとdetailBodyの役割分担、pointsの役割、quizの問い・答え・根拠の対応を維持し、
 漢字の読みや語の難しさに必要な修正だけを行ってください。
 元の文章が持っている「${grade}の子に分かる順番で教える先生」の説明の自然さ・親しみやすさ・発見の流れも壊さないでください。
 
@@ -638,8 +639,9 @@ function makeSchema(wordCount: number) {
           properties: {
             question: { type: "string" },
             answer: { type: "string" },
+            evidence: { type: "string" },
           },
-          required: ["question", "answer"],
+          required: ["question", "answer", "evidence"],
         },
       },
     },
@@ -707,6 +709,14 @@ ${spec.whyRule}
 
 ${spec.quizRule}
 
+【quizの根拠 evidence：「どこを読めばわかる？」】
+- quizの各問題には question / answer / evidence を必ず出力する。
+- evidenceは、その答えの根拠になる「変換後のbodyの一文」を、原則としてそのまま抜き出す。
+- evidenceのために新しい説明文を作らない。元記事ではなく、必ず変換後のbodyから選ぶ。
+- 1文で根拠を示せる問題を優先する。どうしても1文だけでは不足する場合のみ、連続する2文まで使ってよい。
+- evidenceを読めば「なぜこの答えになるのか」が${selectedGrade}にも分かる問題にする。
+- Q1〜Q3で同じ一文ばかりを根拠にしない。
+
 【detailBody：「もっとくわしく読む」】
 - bodyを読んだ後に、さらに知りたい子が読む発展部分として書く。
 - 元記事にあるがbodyでは省いた重要情報を優先する。単なるbodyの言い換えや全文の繰り返しにしない。
@@ -738,6 +748,7 @@ ${spec.quizRule}
 - wordsのtermは原則としてbodyに実際に出す重要語から選ぶ。
 - whyはbodyと矛盾しない。
 - quizのanswerは、bodyのどこかから直接確認できる内容にする。
+- quizのevidenceは、そのanswerを支えるbodyの一文（必要な場合のみ連続2文）をそのまま示す。
 - Q1〜Q3で同じことを繰り返し聞かない。
 - 記事に該当する内容がない場合、「理由」「意見」「影響」などを無理に作らず、その学年に合う別の読解問題へ置き換える。
 
@@ -758,6 +769,7 @@ ${spec.quizRule}
 - 原文にない説明を「分かりやすくするため」に足していないか。
 - 3つのpointsと3つのquizが、それぞれ別の役割を持っているか。
 - quizの答えが変換後のbodyから本当に確認できるか。
+- quizのevidenceが変換後のbodyに実際に存在し、その答えの根拠になっているか。bodyを校正した場合はevidenceも同じ文に更新できているか。
 
 whyに記事内の根拠がない場合は、必ず次の文を使う：
 「${spec.whyFallback}」
