@@ -46,7 +46,47 @@ export default function Home() {
       <div className="panel" id="check-article"><SectionTitle number="3" title="読みまちがいを直そう" note=""/><p className="digital-paste-note">ネットの記事は、文章をコピーして下にはりつけても使えます。</p><p className="edit-note">写真と文章を見くらべて、ちがう文字を直してね。</p><ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setResult(null); }}/>{text.trim() && <a className="next-step" href="#choose-grade">たしかめたら、学年をえらぶ ↓</a>}</div>
       <div className="panel" id="choose-grade"><SectionTitle number="4" title="読む人の学年をえらぼう" note="学年をえらんで、下の青いボタンを押してね。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting || scanning} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "の言葉で読む"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像は読み取りのためGoogle Cloudへ、画像と文章は内容の確認・学年別変換のためOpenAI APIへ送信します。</p></div>
     </section>
-    {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><div className="article-first"><p><b>まずわかる</b></p><p className="article">{result.body}</p></div>{result.detailBody && <details className="article-detail"><summary>もっとくわしく読む</summary><p className="article">{result.detailBody}</p></details>}<div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem key={index} number={index + 1} question={item.question} answer={item.answer}/>)}</section></div></section>}
+    {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><div className="article-first"><p><b>学年に合わせて読む▶あなたの学年でわかる言葉にしています。</b></p><p className="article">{result.body}</p></div>{result.detailBody && <details className="article-detail" style={{ marginTop: "18px" }}>
+  <summary
+    style={{
+      cursor: "pointer",
+      listStyle: "none",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "12px",
+      width: "100%",
+      boxSizing: "border-box",
+      padding: "16px 18px",
+      border: "2px solid #2f6fd6",
+      borderRadius: "14px",
+      background: "#eef5ff",
+      fontWeight: 800,
+      fontSize: "1.05rem",
+      color: "#184f9f",
+      boxShadow: "0 3px 10px rgba(47,111,214,.12)",
+    }}
+  >
+    <span>
+      <span style={{ display: "block", fontSize: ".78rem", fontWeight: 700, color: "#5c6f87", marginBottom: "3px" }}>
+        もう少し知りたい人へ
+      </span>
+      もっとくわしく読む
+    </span>
+    <span aria-hidden="true" style={{ fontSize: "1.2rem" }}>▼</span>
+  </summary>
+  <div
+    style={{
+      marginTop: "10px",
+      padding: "16px 18px",
+      borderRadius: "12px",
+      background: "#f8fbff",
+      border: "1px solid #d8e6fa",
+    }}
+  >
+    <p className="article">{result.detailBody}</p>
+  </div>
+</details>}<div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem key={index} number={index + 1} question={item.question} answer={item.answer}/>)}</section></div></section>}
     <footer>新聞記事 AI学年別理解サポート（試作版）</footer>
   </main>;
 }
