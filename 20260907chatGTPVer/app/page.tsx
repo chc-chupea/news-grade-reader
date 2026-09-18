@@ -30,20 +30,8 @@ export default function Home() {
       const response = await fetch("/api/convert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.trim(), grade }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "変換に失敗しました。");
-      const normalized = normalizeGeneratedResult(data);
-      const normalizedDetailBody = typeof data?.detailBody === "string" && data.detailBody.trim()
-        ? normalizeGeneratedResult({ ...data, body: data.detailBody }).body
-        : "";
-      const normalizedQuiz = normalized.quiz.map((item, index) => {
-        const rawEvidence = Array.isArray(data?.quiz) && typeof data.quiz[index]?.evidence === "string"
-          ? data.quiz[index].evidence
-          : "";
-        const evidence = rawEvidence
-          ? normalizeGeneratedResult({ ...data, body: rawEvidence }).body
-          : "";
-        return { ...item, evidence };
-      });
-      setResult({ ...normalized, detailBody: normalizedDetailBody, quiz: normalizedQuiz }); setTimeout(() => document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" }), 50);
+      const normalized = normalizeGeneratedResult(data) as Result;
+      setResult(normalized); setTimeout(() => document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "変換に失敗しました。"); }
     finally { setConverting(false); }
   };
@@ -131,7 +119,7 @@ function QuizItem({ number, question, answer, evidence }: { number: number; ques
           {evidenceOpen ? "根拠を隠す" : "どこを読めばわかる？"}
         </button>
         {evidenceOpen && <div style={{ marginTop: "10px", padding: "12px 14px", borderLeft: "4px solid #5d8fc7", borderRadius: "8px", background: "#f7faff" }}>
-          <b style={{ display: "block", marginBottom: "5px", color: "#245f9e" }}>上の「学年に合わせて読む」から、ここを読もう</b>
+          <b style={{ display: "block", marginBottom: "5px", color: "#245f9e" }}>ここを読もう</b>
           <span>「{evidence}」</span>
         </div>}
       </>}
