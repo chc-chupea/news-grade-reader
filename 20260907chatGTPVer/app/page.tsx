@@ -97,7 +97,7 @@ function QuizItem({ number, question, answer, evidence }: { number: number; ques
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   return <div className="quiz-item">
     <p><b>Q{number}</b>{question}</p>
-    <button type="button" onClick={() => { setOpen((current) => !current); if (open) setEvidenceOpen(false); }}>{open ? "答えをかくす" : "答えを見る"}</button>
+    <button type="button" onClick={() => { setOpen((current) => !current); if (open) setEvidenceOpen(false); }}>{open ? "答えを隠す" : "答えを見る"}</button>
     {open && <div className="quiz-answer">
       <b>答え</b><span>{answer}</span>
       {evidence && <>
@@ -116,7 +116,7 @@ function QuizItem({ number, question, answer, evidence }: { number: number; ques
             cursor: "pointer",
           }}
         >
-          {evidenceOpen ? "とじる" : "どこを読めばわかる？"}
+          {evidenceOpen ? "ヒントをかくす" : "どこを読めばわかる？"}
         </button>
         {evidenceOpen && <div style={{ marginTop: "10px", padding: "12px 14px", borderLeft: "4px solid #5d8fc7", borderRadius: "8px", background: "#f7faff" }}>
           <b style={{ display: "block", marginBottom: "5px", color: "#245f9e" }}>上の「学年に合わせて読む」から、ここを読もう</b>
