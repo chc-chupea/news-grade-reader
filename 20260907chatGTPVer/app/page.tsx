@@ -119,7 +119,7 @@ function QuizItem({ number, question, answer, evidence }: { number: number; ques
           {evidenceOpen ? "とじる" : "どこを読めばわかる？"}
         </button>
         {evidenceOpen && <div style={{ marginTop: "10px", padding: "12px 14px", borderLeft: "4px solid #5d8fc7", borderRadius: "8px", background: "#f7faff" }}>
-          <b style={{ display: "block", marginBottom: "5px", color: "#245f9e" }}>ここを読もう</b>
+          <b style={{ display: "block", marginBottom: "5px", color: "#245f9e" }}>上の「学年に合わせて読む」から、ここを読もう</b>
           <span>「{evidence}」</span>
         </div>}
       </>}
