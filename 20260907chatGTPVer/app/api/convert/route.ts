@@ -420,7 +420,8 @@ function resultTextFields(result: GeneratedResult): TextField[] {
   result.quiz.forEach((item, index) => {
     fields.push({ path: `quiz[${index}].question`, text: item.question });
     fields.push({ path: `quiz[${index}].answer`, text: item.answer });
-    fields.push({ path: `quiz[${index}].evidence`, text: item.evidence });
+    // evidence は最終校正後の body からコード側でそのまま抜き出すため、
+    // ここでは独立した漢字校正対象にしない。
   });
 
   return fields;
@@ -475,6 +476,114 @@ function excerpt(text: string, target: string) {
 
 function unique<T>(items: T[]) {
   return [...new Set(items)];
+}
+
+
+
+type BodySentence = { text: string; start: number; end: number };
+
+function bodySentences(body: string): BodySentence[] {
+  const sentences: BodySentence[] = [];
+  const pattern = /[^。！？!?]+[。！？!?]?/gu;
+
+  for (const match of body.matchAll(pattern)) {
+    if (match.index === undefined) continue;
+    const raw = match[0];
+    const leading = raw.length - raw.trimStart().length;
+    const trailing = raw.length - raw.trimEnd().length;
+    const start = match.index + leading;
+    const end = match.index + raw.length - trailing;
+    if (end > start) sentences.push({ text: body.slice(start, end), start, end });
+  }
+
+  if (!sentences.length && body.trim()) {
+    const start = body.indexOf(body.trim());
+    return [{ text: body.trim(), start, end: start + body.trim().length }];
+  }
+
+  return sentences;
+}
+
+function compactForEvidence(text: string) {
+  return text
+    .normalize("NFKC")
+    .replace(/[\s「」『』（）()［］\[\]【】、。！？!?・：:；;]/gu, "")
+    .toLowerCase();
+}
+
+function bigrams(text: string) {
+  const compact = compactForEvidence(text);
+  if (compact.length < 2) return compact ? [compact] : [];
+  const grams: string[] = [];
+  for (let i = 0; i < compact.length - 1; i += 1) grams.push(compact.slice(i, i + 2));
+  return grams;
+}
+
+function overlapScore(candidate: string, target: string) {
+  const left = bigrams(candidate);
+  const right = bigrams(target);
+  if (!left.length || !right.length) return 0;
+
+  const counts = new Map<string, number>();
+  for (const gram of right) counts.set(gram, (counts.get(gram) ?? 0) + 1);
+
+  let overlap = 0;
+  for (const gram of left) {
+    const count = counts.get(gram) ?? 0;
+    if (count > 0) {
+      overlap += 1;
+      counts.set(gram, count - 1);
+    }
+  }
+
+  return (2 * overlap) / (left.length + right.length);
+}
+
+/**
+ * quiz.evidence を、最終校正後の body に実在する一文（必要なら連続2文）へ固定する。
+ * AIの返答が少し言い換わっていても、APIから返す evidence は必ず body の部分文字列になる。
+ */
+function alignQuizEvidenceToBody(result: GeneratedResult): GeneratedResult {
+  const sentences = bodySentences(result.body);
+  if (!sentences.length) return result;
+
+  const candidates: string[] = [];
+  for (let i = 0; i < sentences.length; i += 1) {
+    candidates.push(sentences[i].text);
+    if (i + 1 < sentences.length) {
+      candidates.push(result.body.slice(sentences[i].start, sentences[i + 1].end).trim());
+    }
+  }
+
+  return {
+    ...result,
+    quiz: result.quiz.map((item) => {
+      const requested = item.evidence.trim();
+
+      // AIが正しくbodyから抜き出している場合は、そのまま使う。
+      if (requested && result.body.includes(requested)) {
+        return { ...item, evidence: requested };
+      }
+
+      // 一致しない場合だけ、AIが返したevidence・answer・questionとの近さから
+      // body内の一文（または連続2文）をコード側で選び直す。
+      let best = candidates[0];
+      let bestScore = -1;
+      for (const candidate of candidates) {
+        const score =
+          overlapScore(candidate, requested) * 4 +
+          overlapScore(candidate, item.answer) * 3 +
+          overlapScore(candidate, item.question) * 1;
+        if (score > bestScore) {
+          best = candidate;
+          bestScore = score;
+        }
+      }
+
+      // best は body から slice / 抜き出しした文字列なので、必ず完全一致する。
+      return { ...item, evidence: best };
+    }),
+  };
 }
 
 function buildKanjiAudit(result: GeneratedResult, grade: Grade): KanjiAudit {
@@ -794,12 +903,15 @@ ${normalizedText}
      * 生成後の漢字をコード側で検査し、必要な場合だけ最終漢字校正をかける。
      * 小学生は学年別漢字配当表で機械検査、中学生は固定配当がないため候補抽出＋AI判断。
      */
-    const result = await finalKanjiReview(
+    const reviewedResult = await finalKanjiReview(
       firstResult,
       selectedGrade,
       spec,
       schema,
     );
+
+    // 最終校正でbodyの表現が変わった場合も、evidenceを必ず現在のbodyへ再同期する。
+    const result = alignQuizEvidenceToBody(reviewedResult);
 
     return Response.json({
       ...result,
