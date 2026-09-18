@@ -21,29 +21,31 @@ export default function Home() {
   const [articleImage, setArticleImage] = useState<ArticleImage | null>(null);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<Result | null>(null), [converting, setConverting] = useState(false);
+  const [activeEvidenceIndex, setActiveEvidenceIndex] = useState<number | null>(null);
   const [error, setError] = useState(""), [copied, setCopied] = useState(false);
   const selectedGrade = grades.find((item) => item.id === grade)!;
   const convert = async () => {
     if (!text.trim() || converting || scanning) return;
-    setConverting(true); setResult(null); setError("");
+    setConverting(true); setResult(null); setActiveEvidenceIndex(null); setError("");
     try {
       const response = await fetch("/api/convert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.trim(), grade }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "変換に失敗しました。");
       const normalized = normalizeGeneratedResult(data) as Result;
+      setActiveEvidenceIndex(null);
       setResult(normalized); setTimeout(() => document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "変換に失敗しました。"); }
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.8</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.9</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow" aria-label="使い方の順番"><span><b>1</b>えらぶ</span><span><b>2</b>囲む</span><span><b>3</b>たしかめる</span><span><b>4</b>学年</span></div></section>
-    <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); }}/>
+    <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); setActiveEvidenceIndex(null); }}/>
     <section className="workspace">
-      <div className="panel" id="check-article"><SectionTitle number="3" title="読みまちがいを直そう" note=""/><p className="digital-paste-note">ネットの記事は、文章をコピーして下にはりつけても使えます。</p><p className="edit-note">写真と文章を見くらべて、ちがう文字を直してね。</p><ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setResult(null); }}/>{text.trim() && <a className="next-step" href="#choose-grade">たしかめたら、学年をえらぶ ↓</a>}</div>
-      <div className="panel" id="choose-grade"><SectionTitle number="4" title="読む人の学年をえらぼう" note="学年をえらんで、下の青いボタンを押してね。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting || scanning} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "の言葉で読む"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像は読み取りのためGoogle Cloudへ、画像と文章は内容の確認・学年別変換のためOpenAI APIへ送信します。</p></div>
+      <div className="panel" id="check-article"><SectionTitle number="3" title="読みまちがいを直そう" note=""/><p className="digital-paste-note">ネットの記事は、文章をコピーして下にはりつけても使えます。</p><p className="edit-note">写真と文章を見くらべて、ちがう文字を直してね。</p><ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setResult(null); setActiveEvidenceIndex(null); }}/>{text.trim() && <a className="next-step" href="#choose-grade">たしかめたら、学年をえらぶ ↓</a>}</div>
+      <div className="panel" id="choose-grade"><SectionTitle number="4" title="読む人の学年をえらぼう" note="学年をえらんで、下の青いボタンを押してね。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); setActiveEvidenceIndex(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting || scanning} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "の言葉で読む"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像は読み取りのためGoogle Cloudへ、画像と文章は内容の確認・学年別変換のためOpenAI APIへ送信します。</p></div>
     </section>
-    {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><div className="article-first"><p><b>学年に合わせて読む</b><br/><small>あなたの学年でわかる言葉にしています。</small></p><p className="article">{result.body}</p></div>{result.detailBody && <details className="article-detail" style={{ marginTop: "18px" }}>
+    {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><div className="article-first"><p><b>学年に合わせて読む</b><br/><small>あなたの学年でわかる言葉にしています。</small></p><p className="article" id="grade-article-body"><HighlightedArticle text={result.body} evidence={activeEvidenceIndex !== null ? result.quiz[activeEvidenceIndex]?.evidence ?? "" : ""}/></p></div>{result.detailBody && <details className="article-detail" style={{ marginTop: "18px" }}>
   <summary
     style={{
       cursor: "pointer",
@@ -83,7 +85,20 @@ export default function Home() {
   >
     <p className="article">{result.detailBody}</p>
   </div>
-</details>}<div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem key={index} number={index + 1} question={item.question} answer={item.answer} evidence={item.evidence}/>)}</section></div></section>}
+</details>}<div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem
+  key={index}
+  number={index + 1}
+  question={item.question}
+  answer={item.answer}
+  evidence={item.evidence}
+  isEvidenceActive={activeEvidenceIndex === index}
+  onEvidenceToggle={(show) => {
+    setActiveEvidenceIndex(show ? index : null);
+    if (show) {
+      setTimeout(() => document.querySelector("#evidence-highlight")?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+    }
+  }}
+/>)}</section></div></section>}
     <footer>新聞記事 AI学年別理解サポート（試作版）</footer>
   </main>;
 }
@@ -92,36 +107,82 @@ function SectionTitle({ number, title, note }: { number: string; title: string; 
   return <div className="section-title"><b>{number}</b><div><h2>{title}</h2><p>{note}</p></div></div>;
 }
 
-function QuizItem({ number, question, answer, evidence }: { number: number; question: string; answer: string; evidence: string }) {
+function HighlightedArticle({ text, evidence }: { text: string; evidence: string }) {
+  if (!evidence) return <>{text}</>;
+  const index = text.indexOf(evidence);
+  if (index < 0) return <>{text}</>;
+
+  return <>
+    {text.slice(0, index)}
+    <mark
+      id="evidence-highlight"
+      style={{
+        background: "#ffef8a",
+        color: "inherit",
+        borderRadius: "4px",
+        padding: "1px 2px",
+        boxShadow: "0 0 0 2px rgba(255, 214, 0, .18)",
+      }}
+    >
+      {evidence}
+    </mark>
+    {text.slice(index + evidence.length)}
+  </>;
+}
+
+function QuizItem({
+  number,
+  question,
+  answer,
+  evidence,
+  isEvidenceActive,
+  onEvidenceToggle,
+}: {
+  number: number;
+  question: string;
+  answer: string;
+  evidence: string;
+  isEvidenceActive: boolean;
+  onEvidenceToggle: (show: boolean) => void;
+}) {
   const [open, setOpen] = useState(false);
-  const [evidenceOpen, setEvidenceOpen] = useState(false);
+
   return <div className="quiz-item">
     <p><b>Q{number}</b>{question}</p>
-    <button type="button" onClick={() => { setOpen((current) => !current); if (open) setEvidenceOpen(false); }}>{open ? "答えを隠す" : "答えを見る"}</button>
+    <button
+      type="button"
+      onClick={() => {
+        const nextOpen = !open;
+        setOpen(nextOpen);
+        if (!nextOpen && isEvidenceActive) onEvidenceToggle(false);
+      }}
+    >
+      {open ? "答えを隠す" : "答えを見る"}
+    </button>
+
     {open && <div className="quiz-answer">
       <b>答え</b><span>{answer}</span>
       {evidence && <>
         <button
           type="button"
-          onClick={() => setEvidenceOpen((current) => !current)}
+          onClick={() => onEvidenceToggle(!isEvidenceActive)}
           style={{
             marginTop: "12px",
             alignSelf: "flex-start",
             border: "1px solid #7aa4d8",
             borderRadius: "999px",
-            background: "#f4f8fd",
+            background: isEvidenceActive ? "#fff7c8" : "#f4f8fd",
             color: "#245f9e",
             fontWeight: 700,
             padding: "8px 12px",
             cursor: "pointer",
           }}
         >
-          {evidenceOpen ? "ヒントをかくす" : "どこを読めばわかる？"}
+          {isEvidenceActive ? "マークを消す" : "どこを読めばわかる？"}
         </button>
-        {evidenceOpen && <div style={{ marginTop: "10px", padding: "12px 14px", borderLeft: "4px solid #5d8fc7", borderRadius: "8px", background: "#f7faff" }}>
-          <b style={{ display: "block", marginBottom: "5px", color: "#245f9e" }}>上の「学年に合わせて読む」から、ここを読もう</b>
-          <span>「{evidence}」</span>
-        </div>}
+        {isEvidenceActive && <small style={{ display: "block", marginTop: "8px", color: "#5c6f87", lineHeight: 1.6 }}>
+          上の「学年に合わせて読む」の中をマークしたよ。
+        </small>}
       </>}
     </div>}
   </div>;
