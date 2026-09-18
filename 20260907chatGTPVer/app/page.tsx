@@ -38,7 +38,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.10</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.10.1</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow" aria-label="使い方の順番"><span><b>1</b>えらぶ</span><span><b>2</b>囲む</span><span><b>3</b>たしかめる</span><span><b>4</b>学年</span></div></section>
     <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); setActiveEvidenceIndex(null); }}/>
     <section className="workspace">
@@ -374,12 +374,21 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
     if (!lens) return;
 
     const edge = 12;
-    const gapFromFinger = 30;
+    const gapFromFinger = 34;
+    const sideGap = 42;
     let left = event.clientX - MAGNIFIER_SIZE / 2;
     let top = event.clientY - MAGNIFIER_SIZE - gapFromFinger;
 
-    // Near the top edge, put the lens below the finger instead of clipping it.
-    if (top < edge) top = event.clientY + gapFromFinger;
+    // Never place the lens below the finger: the finger would hide it.
+    // Near the top edge, move the lens to the side with the most useful space.
+    if (top < edge) {
+      const placeOnRight = event.clientX < window.innerWidth / 2;
+      left = placeOnRight
+        ? event.clientX + sideGap
+        : event.clientX - MAGNIFIER_SIZE - sideGap;
+      top = event.clientY - MAGNIFIER_SIZE / 2 - 18;
+    }
+
     left = Math.max(edge, Math.min(window.innerWidth - MAGNIFIER_SIZE - edge, left));
     top = Math.max(edge, Math.min(window.innerHeight - MAGNIFIER_SIZE - edge, top));
 
