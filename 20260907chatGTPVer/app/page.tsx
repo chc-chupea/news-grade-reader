@@ -8,7 +8,7 @@ import { normalizeGeneratedResult } from "@/lib/display-text";
 import { Camera, Check, Copy, ImagePlus, RotateCcw, ScanLine, Sparkles } from "lucide-react";
 
 type Point = { x: number; y: number };
-type Result = { title: string; body: string; detailBody: string; points: string[]; words: [string, string][]; why: string; relation: string; quiz: { question: string; answer: string }[] };
+type Result = { title: string; body: string; detailBody: string; points: string[]; words: [string, string][]; why: string; relation: string; quiz: { question: string; answer: string; evidence: string }[] };
 type ReadingReview = { summary: string; uncertainSegments: string[]; excludedElements: string[]; confidence: "high" | "medium" | "low"; layout: "vertical" | "horizontal" | "mixed" };
 const grades = [
   { id: "小4", label: "小学4年", note: "やさしく短く" }, { id: "小5", label: "小学5年", note: "理由もわかる" },
@@ -34,19 +34,28 @@ export default function Home() {
       const normalizedDetailBody = typeof data?.detailBody === "string" && data.detailBody.trim()
         ? normalizeGeneratedResult({ ...data, body: data.detailBody }).body
         : "";
-      setResult({ ...normalized, detailBody: normalizedDetailBody }); setTimeout(() => document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" }), 50);
+      const normalizedQuiz = normalized.quiz.map((item, index) => {
+        const rawEvidence = Array.isArray(data?.quiz) && typeof data.quiz[index]?.evidence === "string"
+          ? data.quiz[index].evidence
+          : "";
+        const evidence = rawEvidence
+          ? normalizeGeneratedResult({ ...data, body: rawEvidence }).body
+          : "";
+        return { ...item, evidence };
+      });
+      setResult({ ...normalized, detailBody: normalizedDetailBody, quiz: normalizedQuiz }); setTimeout(() => document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "変換に失敗しました。"); }
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.7</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.8</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow" aria-label="使い方の順番"><span><b>1</b>えらぶ</span><span><b>2</b>囲む</span><span><b>3</b>たしかめる</span><span><b>4</b>学年</span></div></section>
     <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); }}/>
     <section className="workspace">
       <div className="panel" id="check-article"><SectionTitle number="3" title="読みまちがいを直そう" note=""/><p className="digital-paste-note">ネットの記事は、文章をコピーして下にはりつけても使えます。</p><p className="edit-note">写真と文章を見くらべて、ちがう文字を直してね。</p><ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setResult(null); }}/>{text.trim() && <a className="next-step" href="#choose-grade">たしかめたら、学年をえらぶ ↓</a>}</div>
       <div className="panel" id="choose-grade"><SectionTitle number="4" title="読む人の学年をえらぼう" note="学年をえらんで、下の青いボタンを押してね。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting || scanning} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "の言葉で読む"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像は読み取りのためGoogle Cloudへ、画像と文章は内容の確認・学年別変換のためOpenAI APIへ送信します。</p></div>
     </section>
-    {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><div className="article-first"><p><b>学年に合わせて読む▶あなたの学年でわかる言葉にしています。</b></p><p className="article">{result.body}</p></div>{result.detailBody && <details className="article-detail" style={{ marginTop: "18px" }}>
+    {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><div className="article-first"><p><b>学年に合わせて読む</b><br/><small>あなたの学年でわかる言葉にしています。</small></p><p className="article">{result.body}</p></div>{result.detailBody && <details className="article-detail" style={{ marginTop: "18px" }}>
   <summary
     style={{
       cursor: "pointer",
@@ -86,7 +95,7 @@ export default function Home() {
   >
     <p className="article">{result.detailBody}</p>
   </div>
-</details>}<div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem key={index} number={index + 1} question={item.question} answer={item.answer}/>)}</section></div></section>}
+</details>}<div className="result-grid"><section><h3>大事なこと</h3><ol>{result.points.map((point, index) => <li key={index}><b>{index + 1}</b>{point}</li>)}</ol></section><section><h3>ニュースの言葉</h3>{result.words.map(([word, meaning]) => <dl key={word}><dt>{word}</dt><dd>{meaning}</dd></dl>)}</section><section><h3>どうして？</h3><p>{result.why}</p></section><section className="quiz-section"><h3>わかったかな？</h3>{result.quiz.map((item, index) => <QuizItem key={index} number={index + 1} question={item.question} answer={item.answer} evidence={item.evidence}/>)}</section></div></section>}
     <footer>新聞記事 AI学年別理解サポート（試作版）</footer>
   </main>;
 }
@@ -95,12 +104,38 @@ function SectionTitle({ number, title, note }: { number: string; title: string; 
   return <div className="section-title"><b>{number}</b><div><h2>{title}</h2><p>{note}</p></div></div>;
 }
 
-function QuizItem({ number, question, answer }: { number: number; question: string; answer: string }) {
+function QuizItem({ number, question, answer, evidence }: { number: number; question: string; answer: string; evidence: string }) {
   const [open, setOpen] = useState(false);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   return <div className="quiz-item">
     <p><b>Q{number}</b>{question}</p>
-    <button type="button" onClick={() => setOpen((current) => !current)}>{open ? "答えを隠す" : "答えを見る"}</button>
-    {open && <div className="quiz-answer"><b>答え</b><span>{answer}</span></div>}
+    <button type="button" onClick={() => { setOpen((current) => !current); if (open) setEvidenceOpen(false); }}>{open ? "答えを隠す" : "答えを見る"}</button>
+    {open && <div className="quiz-answer">
+      <b>答え</b><span>{answer}</span>
+      {evidence && <>
+        <button
+          type="button"
+          onClick={() => setEvidenceOpen((current) => !current)}
+          style={{
+            marginTop: "12px",
+            alignSelf: "flex-start",
+            border: "1px solid #7aa4d8",
+            borderRadius: "999px",
+            background: "#f4f8fd",
+            color: "#245f9e",
+            fontWeight: 700,
+            padding: "8px 12px",
+            cursor: "pointer",
+          }}
+        >
+          {evidenceOpen ? "根拠を隠す" : "どこを読めばわかる？"}
+        </button>
+        {evidenceOpen && <div style={{ marginTop: "10px", padding: "12px 14px", borderLeft: "4px solid #5d8fc7", borderRadius: "8px", background: "#f7faff" }}>
+          <b style={{ display: "block", marginBottom: "5px", color: "#245f9e" }}>上の「学年に合わせて読む」から、ここを読もう</b>
+          <span>「{evidence}」</span>
+        </div>}
+      </>}
+    </div>}
   </div>;
 }
 
