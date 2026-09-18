@@ -38,7 +38,7 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.9</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.10</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow" aria-label="使い方の順番"><span><b>1</b>えらぶ</span><span><b>2</b>囲む</span><span><b>3</b>たしかめる</span><span><b>4</b>学年</span></div></section>
     <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); setActiveEvidenceIndex(null); }}/>
     <section className="workspace">
@@ -279,6 +279,132 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
   };
   const frame = useRef<number | null>(null);
   const previewRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Ver.4.10: finger magnifier.
+  // This is a display-only layer. It never changes selectionPath or the crop/OCR logic.
+  const magnifierRef = useRef<HTMLCanvasElement>(null);
+  const magnifierFrame = useRef<number | null>(null);
+  const magnifierSample = useRef<{ point: Point; clientX: number; clientY: number; rect: DOMRect } | null>(null);
+  const MAGNIFIER_SIZE = 124;
+  const MAGNIFIER_ZOOM = 2.8;
+
+  const hideMagnifier = () => {
+    if (magnifierFrame.current !== null) cancelAnimationFrame(magnifierFrame.current);
+    magnifierFrame.current = null;
+    magnifierSample.current = null;
+    if (magnifierRef.current) magnifierRef.current.style.display = "none";
+  };
+
+  const renderMagnifier = () => {
+    magnifierFrame.current = null;
+    const lens = magnifierRef.current;
+    const canvas = canvasRef.current;
+    const sample = magnifierSample.current;
+    if (!lens || !canvas || !sample) return;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const pixelSize = Math.max(1, Math.round(MAGNIFIER_SIZE * dpr));
+    if (lens.width !== pixelSize || lens.height !== pixelSize) {
+      lens.width = pixelSize;
+      lens.height = pixelSize;
+    }
+
+    const context = lens.getContext("2d");
+    if (!context) return;
+
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.clearRect(0, 0, pixelSize, pixelSize);
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, pixelSize, pixelSize);
+
+    // Reproduce the same point that sits under the finger at the exact centre of the lens.
+    const scaleX = MAGNIFIER_ZOOM * dpr * sample.rect.width / canvas.width;
+    const scaleY = MAGNIFIER_ZOOM * dpr * sample.rect.height / canvas.height;
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.setTransform(
+      scaleX,
+      0,
+      0,
+      scaleY,
+      pixelSize / 2 - sample.point.x * scaleX,
+      pixelSize / 2 - sample.point.y * scaleY,
+    );
+    context.drawImage(canvas, 0, 0);
+
+    // High-contrast centre sight: this is the point the user's finger is selecting.
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    const centre = pixelSize / 2;
+    const arm = 13 * dpr;
+    const gap = 5 * dpr;
+    const drawSight = (strokeStyle: string, lineWidth: number) => {
+      context.beginPath();
+      context.moveTo(centre - arm, centre);
+      context.lineTo(centre - gap, centre);
+      context.moveTo(centre + gap, centre);
+      context.lineTo(centre + arm, centre);
+      context.moveTo(centre, centre - arm);
+      context.lineTo(centre, centre - gap);
+      context.moveTo(centre, centre + gap);
+      context.lineTo(centre, centre + arm);
+      context.strokeStyle = strokeStyle;
+      context.lineWidth = lineWidth;
+      context.lineCap = "round";
+      context.stroke();
+    };
+    drawSight("rgba(255,255,255,.96)", 4.5 * dpr);
+    drawSight("#17334d", 1.7 * dpr);
+    context.beginPath();
+    context.arc(centre, centre, 3.2 * dpr, 0, Math.PI * 2);
+    context.fillStyle = "#df3e32";
+    context.fill();
+    context.lineWidth = 1.8 * dpr;
+    context.strokeStyle = "#fff";
+    context.stroke();
+  };
+
+  const updateMagnifier = (
+    event: React.PointerEvent<HTMLCanvasElement>,
+    point: Point,
+    immediate = false,
+  ) => {
+    // The lens is for a finger/stylus. Keep desktop mouse operation unchanged.
+    if (event.pointerType === "mouse") return;
+    const lens = magnifierRef.current;
+    if (!lens) return;
+
+    const edge = 12;
+    const gapFromFinger = 30;
+    let left = event.clientX - MAGNIFIER_SIZE / 2;
+    let top = event.clientY - MAGNIFIER_SIZE - gapFromFinger;
+
+    // Near the top edge, put the lens below the finger instead of clipping it.
+    if (top < edge) top = event.clientY + gapFromFinger;
+    left = Math.max(edge, Math.min(window.innerWidth - MAGNIFIER_SIZE - edge, left));
+    top = Math.max(edge, Math.min(window.innerHeight - MAGNIFIER_SIZE - edge, top));
+
+    lens.style.left = `${Math.round(left)}px`;
+    lens.style.top = `${Math.round(top)}px`;
+    lens.style.display = "block";
+
+    magnifierSample.current = {
+      point,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      rect: gestureRectRef.current || event.currentTarget.getBoundingClientRect(),
+    };
+
+    if (immediate) {
+      if (magnifierFrame.current !== null) cancelAnimationFrame(magnifierFrame.current);
+      magnifierFrame.current = null;
+      renderMagnifier();
+      return;
+    }
+    if (magnifierFrame.current === null) {
+      magnifierFrame.current = requestAnimationFrame(renderMagnifier);
+    }
+  };
+
   const scheduleDraw = (completed: boolean) => {
     if (frame.current !== null) return;
     frame.current = requestAnimationFrame(() => { frame.current = null; draw(draftPathRef.current, completed); });
@@ -316,9 +442,10 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
   useEffect(() => {
     const stopTouchScroll = (event: TouchEvent) => { if (pointerIdRef.current !== null) event.preventDefault(); };
     document.addEventListener("touchmove", stopTouchScroll, { passive: false });
-    return () => { document.removeEventListener("touchmove", stopTouchScroll); unlockPage(); stopFrame(); };
+    return () => { document.removeEventListener("touchmove", stopTouchScroll); unlockPage(); stopFrame(); hideMagnifier(); };
   }, []);
   const showImage = (image: HTMLImageElement, nextMessage: string) => {
+    hideMagnifier();
     imageRef.current = image;
     const canvas = canvasRef.current;
     if (!canvas) { setMessage("画像表示欄を準備できませんでした。もう一度選んでください。"); return; }
@@ -429,6 +556,7 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
     lockPage();
     event.currentTarget.setPointerCapture(event.pointerId);
     scheduleDraw(editing);
+    updateMagnifier(event, point, true);
   };
   const moveSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!draftPathRef.current.length || pointerIdRef.current !== event.pointerId) return;
@@ -445,11 +573,13 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
       }
     }
     scheduleDraw(editing);
+    updateMagnifier(event, position(event));
   };
   const finishSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!draftPathRef.current.length || pointerIdRef.current !== event.pointerId) return;
     event.preventDefault();
     const point = position(event);
+    hideMagnifier();
     stopFrame();
     if (editing) moveEditedLine(point);
     const finalPath = editing ? [...draftPathRef.current] : stabilizePath([...draftPathRef.current, point], event.currentTarget.width, event.currentTarget.height);
@@ -466,6 +596,7 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
   };
   const cancelSelection = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (pointerIdRef.current !== event.pointerId) return;
+    hideMagnifier();
     stopFrame();
     draw(selectionPath);
     draftPathRef.current = [];
@@ -574,7 +705,25 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
       <SectionTitle number="2" title="読みたいところを指定しよう" note={'「記事を囲む」を押して、読みたいところを指で囲んでね。'}/>
 
       <button type="button" className={tracing ? "trace-guide active" : "trace-guide"} disabled={reading || selectionPath.length > 0} onClick={() => { setTracing(true); setMessage("読みたい記事のまわりを人差し指でなぞってください。"); }}><ScanLine size={20}/><b>{tracing ? "なぞっています" : selectionPath.length ? "囲めたよ" : "記事を囲む"}</b><span>{tracing ? "指の動きに沿って、一本の赤線を描きます。" : selectionPath.length ? "よければ読み取り、「線を動かす」で赤線を動かせます。" : "押してから、記事のまわりを人差し指でなぞります。"}</span></button>
-      <div className={tracing || editing ? "canvas-wrap tracing" : "canvas-wrap"}><canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection} onPointerCancel={cancelSelection}/></div>
+      <div className={tracing || editing ? "canvas-wrap tracing" : "canvas-wrap"}>
+        <canvas ref={canvasRef} onContextMenu={(event) => event.preventDefault()} onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection} onPointerCancel={cancelSelection}/>
+        <canvas
+          ref={magnifierRef}
+          aria-hidden="true"
+          style={{
+            display: "none",
+            position: "fixed",
+            width: `${MAGNIFIER_SIZE}px`,
+            height: `${MAGNIFIER_SIZE}px`,
+            borderRadius: "50%",
+            border: "3px solid #fff",
+            background: "#fff",
+            boxShadow: "0 6px 24px rgba(0,0,0,.34), 0 0 0 2px rgba(23,51,77,.46)",
+            pointerEvents: "none",
+            zIndex: 10000,
+          }}
+        />
+      </div>
       {selectionPath.length >= 3 && <div className="scan-actions">
         <button type="button" className="reset" disabled={reading || adjusting} onClick={() => {
           if (pointerIdRef.current !== null) return;
@@ -590,7 +739,7 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
         <button type="button" className="reset" disabled={reading || adjusting} onClick={() => { setEditing(!editing); setMessage(editing ? "囲みができました。次は「この記事を読み取る」を押してね。" : "赤線の直したいところを押したまま動かしてください。線の近くならつかめます。"); }}>{editing ? "線の直しを終える" : "線を動かす"}</button>
         <button type="button" className="reset" disabled={reading || !history.length} onClick={() => { setSelectionPath(history[history.length-1]); setHistory(history.slice(0,-1)); }}>ひとつ戻す</button>
       </div>}
-      <div className="scan-actions"><button className="reset" disabled={reading || adjusting} onClick={() => { stopFrame(); draftPathRef.current = []; setSelectionPath([]); setTracing(true); setEditing(false); setHistory([]); draw([]); setMessage("もう一度、読みたいところを指で囲んでね。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading || adjusting} onClick={read}><ScanLine size={20}/>{reading ? "記事を読み取り中…" : "この記事を読み取る"}</button></div>
+      <div className="scan-actions"><button className="reset" disabled={reading || adjusting} onClick={() => { hideMagnifier(); stopFrame(); draftPathRef.current = []; setSelectionPath([]); setTracing(true); setEditing(false); setHistory([]); draw([]); setMessage("もう一度、読みたいところを指で囲んでね。"); }}><RotateCcw size={16}/>囲み直す</button><button className="primary" disabled={selectionPath.length < 3 || reading || adjusting} onClick={read}><ScanLine size={20}/>{reading ? "記事を読み取り中…" : "この記事を読み取る"}</button></div>
       {message && <p className={message.startsWith("エラー") ? "message error" : "message"}>{message}</p>}
     </div>}
   </section>;
