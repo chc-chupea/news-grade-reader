@@ -49,7 +49,7 @@ export default function Home() {
             <span style={{ marginLeft: "8px" }}>読みまちがいを直してね。</span>
           </div>
           <div className="digital-paste-note" style={{ margin: 0, padding: "8px 10px", borderRadius: "9px", background: "#eef7ff", border: "1px solid #cfe2f3", color: "#184f72" }}>
-            <b>🌐 ネットの記事から読む</b>
+            <b>🌐 ネットの記事を読む</b>
             <span style={{ marginLeft: "8px" }}>文章をコピーして、下にはりつけてね。</span>
           </div>
         </div>
@@ -655,7 +655,7 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
       let imageDataUrl = output.toDataURL("image/png");
       if (imageDataUrl.length > 3_500_000) imageDataUrl = output.toDataURL("image/jpeg", .96);
       if (imageDataUrl.length > 3_500_000) throw new Error("画質を保って送るには、記事の範囲をもう少し小さくしてください。");
-      setMessage("記事を読み取っています。初回は少し時間がかかります…");
+      setMessage("記事を読み取っています。");
       const response = await fetch("/api/ocr", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageDataUrls: [imageDataUrl] }), signal: AbortSignal.timeout(230_000),
