@@ -38,11 +38,22 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.10.2</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.10.3</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow" aria-label="使い方の順番"><span><b>1</b>えらぶ</span><span><b>2</b>囲む</span><span><b>3</b>たしかめる</span><span><b>4</b>学年</span></div></section>
     <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); setActiveEvidenceIndex(null); }}/>
     <section className="workspace">
-      <div className="panel" id="check-article"><SectionTitle number="3" title="読みまちがいを直そう" note=""/><p className="digital-paste-note">ネットの記事は、文章をコピーして下にはりつけても使えます。</p><p className="edit-note">写真と文章を見くらべて、ちがう文字を直してね。</p><ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setResult(null); setActiveEvidenceIndex(null); }}/>{text.trim() && <a className="next-step" href="#choose-grade">たしかめたら、学年をえらぶ ↓</a>}</div>
+      <div className="panel" id="check-article"><SectionTitle number="3" title="記事の文章をたしかめよう" note=""/>
+        <div style={{ display: "grid", gap: "10px", marginBottom: "12px" }}>
+          <div className="edit-note" style={{ margin: 0, padding: "10px 12px", borderRadius: "10px", background: "#f8fafb", border: "1px solid #dde5ea" }}>
+            <b style={{ display: "block", marginBottom: "3px", color: "#17334d" }}>📷 写真から読むとき</b>
+            <span>読み取った文章と写真を見くらべて、ちがう文字を直してね。</span>
+          </div>
+          <div className="digital-paste-note" style={{ margin: 0, padding: "10px 12px", borderRadius: "10px", background: "#eef7ff", border: "1px solid #cfe2f3", color: "#184f72" }}>
+            <b style={{ display: "block", marginBottom: "3px" }}>🌐 ネットの記事なら、ここからでもOK！</b>
+            <span>記事の文章をコピーして、下にはりつけてね。</span>
+          </div>
+        </div>
+        <ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setResult(null); setActiveEvidenceIndex(null); }}/>{text.trim() && <a className="next-step" href="#choose-grade">たしかめたら、学年をえらぶ ↓</a>}</div>
       <div className="panel" id="choose-grade"><SectionTitle number="4" title="読む人の学年をえらぼう" note="学年をえらんで、下の青いボタンを押してね。"/><div className="grades">{grades.map((item) => <button key={item.id} className={grade === item.id ? "grade active" : "grade"} onClick={() => { setGrade(item.id); setResult(null); setActiveEvidenceIndex(null); }}><b>{item.id}</b><span>{item.label}</span><small>{item.note}</small>{grade === item.id && <Check size={15}/>}</button>)}</div><button className="primary" disabled={!text.trim() || converting || scanning} onClick={convert}><Sparkles size={19}/>{converting ? "わかりやすくしています…" : selectedGrade.label + "の言葉で読む"}</button>{error && <p className="message error">{error}</p>}<p className="privacy">画像は読み取りのためGoogle Cloudへ、画像と文章は内容の確認・学年別変換のためOpenAI APIへ送信します。</p></div>
     </section>
     {result && <section id="result" className="result"><div className="result-heading"><div><small>{grade}向け</small><h2>{result.title}</h2></div><button onClick={async () => { await navigator.clipboard.writeText(result.body); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? "コピーしました" : "コピー"}</button></div><div className="article-first"><p><b>学年に合わせて読む</b><br/><small>あなたの学年でわかる言葉にしています。</small></p><p className="article" id="grade-article-body"><HighlightedArticle text={result.body} evidence={activeEvidenceIndex !== null ? result.quiz[activeEvidenceIndex]?.evidence ?? "" : ""}/></p></div>{result.detailBody && <details className="article-detail" style={{ marginTop: "18px" }}>
@@ -704,6 +715,27 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
         <button type="button" className="straighten" disabled={adjusting || reading} onClick={straighten}><Sparkles size={17}/>{adjusting ? "直しています…" : "自動でまっすぐ"}</button>
         <button type="button" disabled={adjusting || reading} onClick={() => rotateImage(90, "右へ回転しました。記事を囲んでください。")}>右に回す<RotateCcw className="rotate-right" size={17}/></button>
         <button type="button" disabled={adjusting || reading} onClick={restoreOriginal}>写真をもとに戻す</button>
+      </div>
+    </div>}
+    {!fileName && <div className="crop">
+      <SectionTitle number="2" title="読みたい記事を囲もう" note="写真をえらぶと、ここに新聞が表示されます。"/>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          padding: "14px 16px",
+          borderRadius: "12px",
+          border: "1px dashed #b9c8d2",
+          background: "#f8fafb",
+          color: "#516674",
+        }}
+      >
+        <ScanLine size={22}/>
+        <div>
+          <b style={{ display: "block", marginBottom: "3px", color: "#17334d" }}>写真をえらぶと、ここで記事を囲めます</b>
+          <span style={{ fontSize: ".9rem", lineHeight: 1.6 }}>読みたい記事のまわりを指で囲んで指定します。</span>
+        </div>
       </div>
     </div>}
     {fileName && <div className={cropExpanded ? "crop crop-expanded" : "crop"}>
