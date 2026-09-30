@@ -38,19 +38,19 @@ export default function Home() {
     finally { setConverting(false); }
   };
   return <main>
-    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.10.3</b></div></header>
+    <header className="topbar"><div className="brand"><span>読</span><div>新聞をわかりやすく<small>NEWS READER FOR STUDENTS</small></div></div><div className="version"><b>Ver.4.10.5</b></div></header>
     <section className="hero"><p><Sparkles size={16}/>新聞がわかる。社会が近くなる。</p><h1>気になるニュースを<br/>読みやすい<span className="word-highlight">言葉</span>へ</h1><div className="flow" aria-label="使い方の順番"><span><b>1</b>えらぶ</span><span><b>2</b>囲む</span><span><b>3</b>たしかめる</span><span><b>4</b>学年</span></div></section>
     <Scanner onBusy={setScanning} onRead={(value, _review, source) => { setText(value); setArticleImage(source || null); setResult(null); setActiveEvidenceIndex(null); }}/>
     <section className="workspace">
       <div className="panel" id="check-article"><SectionTitle number="3" title="記事の文章をたしかめよう" note=""/>
-        <div style={{ display: "grid", gap: "10px", marginBottom: "12px" }}>
-          <div className="edit-note" style={{ margin: 0, padding: "10px 12px", borderRadius: "10px", background: "#f8fafb", border: "1px solid #dde5ea" }}>
-            <b style={{ display: "block", marginBottom: "3px", color: "#17334d" }}>📷 写真から読むとき</b>
-            <span>読み取った文章と写真を見くらべて、ちがう文字を直してね。</span>
+        <div style={{ display: "grid", gap: "8px", marginBottom: "10px" }}>
+          <div className="edit-note" style={{ margin: 0, padding: "8px 10px", borderRadius: "9px", background: "#f8fafb", border: "1px solid #dde5ea" }}>
+            <b style={{ color: "#17334d" }}>📷 写真から記事を読み起こす</b>
+            <span style={{ marginLeft: "8px" }}>読みまちがいを直してね。</span>
           </div>
-          <div className="digital-paste-note" style={{ margin: 0, padding: "10px 12px", borderRadius: "10px", background: "#eef7ff", border: "1px solid #cfe2f3", color: "#184f72" }}>
-            <b style={{ display: "block", marginBottom: "3px" }}>🌐 ネットの記事なら、ここからでもOK！</b>
-            <span>記事の文章をコピーして、下にはりつけてね。</span>
+          <div className="digital-paste-note" style={{ margin: 0, padding: "8px 10px", borderRadius: "9px", background: "#eef7ff", border: "1px solid #cfe2f3", color: "#184f72" }}>
+            <b>🌐 ネットの記事から読む</b>
+            <span style={{ marginLeft: "8px" }}>文章をコピーして、下にはりつけてね。</span>
           </div>
         </div>
         <ArticleEditor text={text} source={articleImage} disabled={scanning || converting} onChange={(value) => { setText(value); setResult(null); setActiveEvidenceIndex(null); }}/>{text.trim() && <a className="next-step" href="#choose-grade">たしかめたら、学年をえらぶ ↓</a>}</div>
@@ -718,24 +718,21 @@ function Scanner({ onRead, onBusy }: { onBusy: (busy: boolean) => void; onRead: 
       </div>
     </div>}
     {!fileName && <div className="crop">
-      <SectionTitle number="2" title="読みたい記事を囲もう" note="写真をえらぶと、ここに新聞が表示されます。"/>
+      <SectionTitle number="2" title="読みたい記事を囲もう" note="写真をえらぶと、ここで囲めます。"/>
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "12px",
-          padding: "14px 16px",
+          gap: "10px",
+          padding: "12px 14px",
           borderRadius: "12px",
           border: "1px dashed #b9c8d2",
           background: "#f8fafb",
           color: "#516674",
         }}
       >
-        <ScanLine size={22}/>
-        <div>
-          <b style={{ display: "block", marginBottom: "3px", color: "#17334d" }}>写真をえらぶと、ここで記事を囲めます</b>
-          <span style={{ fontSize: ".9rem", lineHeight: 1.6 }}>読みたい記事のまわりを指で囲んで指定します。</span>
-        </div>
+        <ScanLine size={21}/>
+        <span style={{ fontSize: ".9rem", lineHeight: 1.5 }}>写真をえらぶと、ここに新聞が表示されます。</span>
       </div>
     </div>}
     {fileName && <div className={cropExpanded ? "crop crop-expanded" : "crop"}>
